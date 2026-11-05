@@ -58,7 +58,9 @@ jobs:
               echo "$PKG_REPO_SIGNING_KEY_B64" | base64 -d > /tmp/localduo-signing.pem
               pkg repo "$repo" "rsa:/tmp/localduo-signing.pem"
               rm -f /tmp/localduo-signing.pem
-              test -f "$repo/meta.txz" -o -f "$repo/meta.pkg"
+              ls -lah "$repo"
+              test -s "$repo/meta.conf"
+              test -s "$repo/data.pkg"
             else
               echo "No PKG_REPO_SIGNING_KEY_B64: unsigned package artifact only; no public repository"
             fi
@@ -82,7 +84,7 @@ jobs:
         id: publishcheck
         shell: bash
         run: |
-          if find site/26.7/amd64 -maxdepth 1 \( -name 'meta.txz' -o -name 'meta.pkg' \) | grep -q .; then
+          if test -s site/26.7/amd64/meta.conf && test -s site/26.7/amd64/data.pkg; then
             echo "enabled=true" >> "$GITHUB_OUTPUT"
           else
             echo "enabled=false" >> "$GITHUB_OUTPUT"
