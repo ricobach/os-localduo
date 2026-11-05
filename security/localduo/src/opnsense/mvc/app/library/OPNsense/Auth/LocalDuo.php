@@ -79,9 +79,8 @@ HTML;
                 'type' => 'text',
                 'help' => gettext('Integration key for your Duo Auth API application.'),
                 'validate' => function ($value) {
-                    return $value === null || $value === '' ||
-                        preg_match('/^DI[A-Za-z0-9]{12,38}$/', (string)$value)
-                        ? [] : [gettext('Invalid Duo integration key.')];
+                    return preg_match('/^DI[A-Za-z0-9]{12,38}$/', (string)($value ?? ''))
+                        ? [] : [gettext('Duo integration key (IKEY) is required and must be valid.')];
                 }
             ],
             'duo_skey' => [
@@ -89,9 +88,8 @@ HTML;
                 'type' => 'text',
                 'help' => gettext('Saved with the authentication server and displayed masked. Editing replaces it; admins can inspect it in HTML source.'),
                 'validate' => function ($value) {
-                    return $value === null || $value === '' ||
-                        preg_match('/^[A-Za-z0-9]{20,120}$/', (string)$value)
-                        ? [] : [gettext('Invalid Duo secret key.')];
+                    return preg_match('/^[A-Za-z0-9]{20,120}$/', (string)($value ?? ''))
+                        ? [] : [gettext('Duo secret key (SKEY) is required and must be valid.')];
                 }
             ],
             'duo_push_type' => [
@@ -127,9 +125,8 @@ HTML;
                 'type' => 'text',
                 'help' => gettext('Example: api-xxxxxxxx.duosecurity.com'),
                 'validate' => function ($value) {
-                    return $value === null || $value === '' ||
-                        preg_match('/^api-[a-z0-9-]+\.duosecurity\.com$/i', (string)$value)
-                        ? [] : [gettext('Invalid Duo API hostname.')];
+                    return preg_match('/^api-[a-z0-9-]+\.duosecurity\.com$/i', strtolower(trim((string)($value ?? ''))))
+                        ? [] : [gettext('Duo API hostname is required and must be valid.')];
                 }
             ]
         ];
@@ -228,9 +225,19 @@ HTML;
                 ($approval['status'] ?? null) === 'allow') {
                 return true;
             }
-            $denied = ($approval['result'] ?? null) === 'deny' ||
-                ($approval['status'] ?? null) === 'deny';
-            self::logAuthFailure($denied ? 'duo_push_denied' : 'duo_push_not_approved', $username);
+            // Only fixed status values are mapped; never log Duo's status_msg.
+            $status = $approval['status'] ?? null;
+            $reasons = [
+                'deny' => 'duo_push_denied',
+                'timeout' => 'duo_push_timeout',
+                'fraud' => 'duo_push_fraud',
+                'locked_out' => 'duo_push_locked_out'
+            ];
+            $reason = is_string($status) && isset($reasons[$status])
+                ? $reasons[$status]
+                : (($approval['result'] ?? null) === 'deny'
+                    ? 'duo_push_denied' : 'duo_push_not_approved');
+            self::logAuthFailure($reason, $username);
             return false;
         } catch (\Throwable $e) {
             self::logAuthFailure(self::diagnosticReason($e), $username);
@@ -238,60 +245,22 @@ HTML;
         }
     }
 
+    /** Credentials are exclusively from the selected native authentication server. */
     private function credentials(): array
     {
         $ikey = (string)($this->serverProperties['ikey'] ?? '');
-        $host = (string)($this->serverProperties['host'] ?? '');
         $skey = (string)($this->serverProperties['skey'] ?? '');
-
-        // Compatibility with v0.4 global credentials.
-        if ($ikey === '' && $host === '' && $skey === '') {
-            $root = Config::getInstance()->object();
-            $legacy = $root->OPNsense->LocalDuo->general ?? null;
-            $ikey = trim((string)($legacy->ikey ?? ''));
-            $host = strtolower(trim((string)($legacy->host ?? '')));
-            $skey = (string)($legacy->skey ?? '');
-        }
-
-        // A newly saved inline SKEY takes priority over the v0.6 secret store.
-        if ($skey === '') {
-            $skey = self::lookupSecret($ikey);
-        }
-        if ($skey === '') {
-            $root = Config::getInstance()->object();
-            $legacy = $root->OPNsense->LocalDuo->general ?? null;
-            if ((string)($legacy->ikey ?? '') === $ikey) {
-                $skey = (string)($legacy->skey ?? '');
-            }
-        }
-
+        $host = (string)($this->serverProperties['host'] ?? '');
         self::assertCredentials($ikey, $skey, $host);
         return compact('ikey', 'skey', 'host');
     }
 
-    /** Lookup a secret by IKEY without exposing it through the API. */
-    public static function lookupSecret(string $ikey): string
-    {
-        if ($ikey === '') {
-            return '';
-        }
-        $root = Config::getInstance()->object();
-        $entries = $root->OPNsense->LocalDuo->secrets ?? null;
-        if ($entries !== null) {
-            foreach ($entries->children() as $entry) {
-                if ((string)($entry->ikey ?? '') === $ikey) {
-                    return (string)($entry->skey ?? '');
-                }
-            }
-        }
-        return '';
-    }
-
     public static function assertCredentials(string $ikey, string $skey, string $host): void
     {
+        $host = strtolower(trim($host));
         if (!preg_match('/^DI[A-Za-z0-9]{12,38}$/', $ikey) ||
             !preg_match('/^[A-Za-z0-9]{20,120}$/', $skey) ||
-            !preg_match('/^api-[a-z0-9-]+\\.duosecurity\\.com$/', $host)) {
+            !preg_match('/^api-[a-z0-9-]+\.duosecurity\.com$/', $host)) {
             throw new \RuntimeException('duo_configuration_invalid');
         }
     }

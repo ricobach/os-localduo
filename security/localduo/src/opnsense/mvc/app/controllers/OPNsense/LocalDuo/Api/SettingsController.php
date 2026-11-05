@@ -21,11 +21,30 @@ class SettingsController extends ApiControllerBase
         try {
             LocalDuo::assertCredentials($ikey, $skey, $host);
             LocalDuo::request(compact('ikey', 'skey', 'host'), 'GET', '/auth/v2/check');
+            syslog(LOG_NOTICE, 'LocalDuo: context=connection_test outcome=success');
             return ['status' => 'ok', 'message' => 'Duo API connection successful'];
         } catch (\Throwable $e) {
             $reason = LocalDuo::diagnosticReason($e);
             syslog(LOG_NOTICE, 'LocalDuo: context=connection_test outcome=failed reason=' . $reason);
-            return ['status' => 'failed', 'message' => 'Duo API connection or credentials failed'];
+            // Predefined messages, never exception text or Duo response details.
+            $messages = [
+                'duo_configuration_invalid' => 'Enter a valid Duo IKEY, SKEY and API hostname.',
+                'duo_api_timeout' => 'Duo API request timed out.',
+                'duo_dns_failure' => 'Unable to resolve the Duo API hostname.',
+                'duo_connection_failed' => 'Unable to connect to the Duo API.',
+                'duo_tls_failed' => 'Duo API TLS validation failed.',
+                'duo_api_unauthorized' => 'Duo rejected the API credentials or access.',
+                'duo_api_rate_limited' => 'Duo API rate limit reached. Try again later.',
+                'duo_api_server_error' => 'Duo API is returning a server error.',
+                'duo_api_http_error' => 'Duo API returned an unexpected HTTP status.',
+                'duo_api_rejected' => 'Duo API rejected the connection check.',
+                'duo_invalid_response' => 'Duo API returned an invalid response.',
+                'duo_network_error' => 'Duo API network request failed.'
+            ];
+            return [
+                'status' => 'failed',
+                'message' => $messages[$reason] ?? 'Duo connection test failed. Check the system log.'
+            ];
         }
     }
 }

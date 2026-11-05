@@ -1,4 +1,4 @@
-# os-localduo v0.8 (experimental)
+# os-localduo v0.9 (experimental)
 
 Native OPNsense authentication server: local password validation followed by Duo Auth API Push.
 
@@ -28,9 +28,15 @@ OPNsense 26.7's pluggable authentication-server editor supports only text, dropd
 
 The editor integration assumes OPNsense continues rendering plugin labels and inline scripts. Verify it visually on the target release.
 
-## Migration from v0.6
+## Migration to v0.9
 
-A v0.6-only SKEY is stored separately, so when you first upgrade to v0.7 the inline SKEY field is empty. **Enter your SKEY once and save the server.** Until then, the authentication connector retains a temporary fallback to the v0.6 secret store or the older global credentials. Once saved, the inline SKEY takes priority. Legacy values are not deleted by the upgrade; back up and verify successful authentication before cleaning them up.
+The connector now reads IKEY, SKEY and API hostname exclusively from the selected authentication server. The old global and separate-secret fallbacks are gone. **Before upgrading**, confirm these three fields are populated and a full Duo login succeeds. Back up the firewall configuration and keep recovery access. Legacy secret values are not automatically deleted from the configuration file.
+
+The native editor now requires valid IKEY, SKEY and API hostname values on save, including edits. Hostname matching is case-insensitive, and runtime normalization uses lowercase.
+
+## Diagnostics
+
+The connection test now reports safe, actionable messages for DNS, TLS, timeouts, invalid credentials, HTTP failures, and rate limits, without returning raw errors. Successful and failed tests are logged. Push denial codes distinguish known Duo statuses: deny, timeout, fraud and locked_out; other outcomes remain denied.
 
 ## Limitations
 
