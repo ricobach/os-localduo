@@ -1,7 +1,11 @@
 <?php
 namespace OPNsense\LocalDuo;
-use OPNsense\Base\IndexController as BaseIndexController;
-class IndexController extends BaseIndexController
+
+class IndexController extends \OPNsense\Base\IndexController
 {
-    public function indexAction() { }
+    public function indexAction()
+    {
+        // Explicitly select this plugin's Volt view.
+        $this->view->pick('OPNsense/LocalDuo/index');
+    }
 }
