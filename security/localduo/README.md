@@ -51,3 +51,11 @@ The connection test now reports safe, actionable messages for DNS, TLS, timeouts
 LocalDuo logs fixed reason codes, sanitized usernames and validated source IP addresses for failed logins. Failed connection tests log the same transport and API reason codes. Neither path logs passwords, SKEY, IKEY, Duo response bodies, signatures, raw exception strings or endpoint URLs.
 
 Examples: local_password_rejected, duo_preauth_denied, duo_preauth_not_authorized, duo_push_unavailable, duo_push_denied, duo_push_not_approved, duo_configuration_invalid, duo_api_timeout, duo_dns_failure, duo_connection_failed, duo_tls_failed, duo_network_error, duo_api_unauthorized, duo_api_rate_limited, duo_api_server_error, duo_api_http_error, duo_api_rejected, duo_invalid_response and duo_unexpected_error. All errors continue to fail closed.
+
+## Login progress feedback (v0.9_1)
+
+After submitting the ordinary Web GUI login form, the browser immediately displays **Signing in… Check Duo Mobile if prompted.** and changes the Login button text to **Signing in…**. This is deliberately generic: a correct password is not asserted, and Duo may not be prompted if the password is wrong or a different authenticator is configured. The authentication request and security checks remain unchanged.
+
+OPNsense 26.7's unauthenticated `authgui.inc` login form has no plugin field/view extension hook. On package installation, LocalDuo adds a single `/ui/js/localduo-login.js` script include to the existing login function. The patcher checks for the exact template anchor, makes an atomic replacement, does not overwrite or own the core file, and removes its own include on package removal. If OPNsense changes the template, the installer leaves it unchanged and reports a warning rather than risking the login form.
+
+**Core upgrades may overwrite this one-line inclusion.** Reinstalling/upgrading os-localduo restores it when the known anchor is still present. If the message disappears after a core upgrade, check the installer output and the script include in `/usr/local/www/authgui.inc`. No change is made to the login backend, local-password verification or Duo Push process.
