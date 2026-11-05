@@ -61,6 +61,28 @@ jobs:
               ls -lah "$repo"
               test -s "$repo/meta.conf"
               test -s "$repo/data.pkg"
+              cat > "${GITHUB_WORKSPACE}/site/index.html" <<'HTML'
+            <!doctype html>
+            <html lang="en">
+            <head>
+              <meta charset="utf-8">
+              <meta name="viewport" content="width=device-width,initial-scale=1">
+              <title>os-localduo — OPNsense Duo MFA</title>
+              <style>
+                body{font-family:system-ui,sans-serif;max-width:750px;margin:4rem auto;padding:0 1rem;line-height:1.6;color:#21262d}
+                a{color:#0969da}code{background:#f6f8fa;padding:.15rem .3rem}
+              </style>
+            </head>
+            <body>
+              <h1>os-localduo</h1>
+              <p>Experimental OPNsense plugin for local authentication plus Duo Push MFA.</p>
+              <p><strong>Build:</strong> OPNsense 26.7 / amd64. Pre-production; test in a lab before deploying.</p>
+              <p><a href="./26.7/amd64/meta.conf">Repository metadata (meta.conf)</a></p>
+              <p><a href="https://github.com/ricobach/os-localduo">Source code and installation guidance</a></p>
+              <p>The package repository is for the FreeBSD <code>pkg</code> client, not a browsable directory listing. Verify the signing key out-of-band before trusting the repository.</p>
+            </body>
+            </html>
+            HTML
             else
               echo "No PKG_REPO_SIGNING_KEY_B64: unsigned package artifact only; no public repository"
             fi
