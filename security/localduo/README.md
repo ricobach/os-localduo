@@ -1,4 +1,4 @@
-# os-localduo v0.7 (experimental)
+# os-localduo v0.8 (experimental)
 
 Native OPNsense authentication server: local password validation followed by Duo Auth API Push.
 
@@ -11,6 +11,16 @@ Native OPNsense authentication server: local password validation followed by Duo
 5. Use **System → Access → Tester** to verify local password + actual Duo Push.
 
 The SKEY is a **standard password field** in the browser: it is populated from the saved server configuration, displayed masked, and resubmitted on Save. Changing the field replaces the stored value. No separate credential-management page remains.
+
+## Duo Push appearance
+
+The authentication-server editor now provides three optional presentation settings:
+
+- **Duo Push title**: blank by default, which lets Duo Mobile show its normal login wording. Set e.g. `Login` if you want a short `Login: OPNsense` heading. The app name `OPNsense` comes from the Duo application's name in the Duo Admin Panel, not from this setting.
+- **Duo Push firewall label**: blank uses the firewall's FQDN; set a short custom label if preferred.
+- **Duo Push service label**: defaults to `Web GUI`. Clear it to omit the Service line.
+
+The old repetitive `Authentication: Administrative Login` line is removed. The source IP, if available, and username continue to be supplied automatically. Duo controls app-origin and location details independently; for example the `N/A` website/domain shown in Duo Mobile is not set by these plugin fields. These fields affect the content of new pushes only.
 
 ## OPNsense 26.7 compatibility and security
 

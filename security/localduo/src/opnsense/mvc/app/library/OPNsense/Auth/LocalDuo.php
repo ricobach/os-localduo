@@ -17,7 +17,10 @@ class LocalDuo extends Local
         $this->serverProperties = [
             'ikey' => trim((string)($config['duo_ikey'] ?? '')),
             'host' => strtolower(trim((string)($config['duo_host'] ?? ''))),
-            'skey' => (string)($config['duo_skey'] ?? '')
+            'skey' => (string)($config['duo_skey'] ?? ''),
+            'push_type' => trim((string)($config['duo_push_type'] ?? '')),
+            'push_firewall' => trim((string)($config['duo_push_firewall'] ?? '')),
+            'push_service' => trim((string)($config['duo_push_service'] ?? 'Web GUI'))
         ];
     }
 
@@ -91,6 +94,34 @@ HTML;
                         ? [] : [gettext('Invalid Duo secret key.')];
                 }
             ],
+            'duo_push_type' => [
+                'name' => gettext('Duo Push title (optional)'),
+                'type' => 'text',
+                'help' => gettext('Leave blank to use Duo Mobile default wording. Enter e.g. Login for a short Login: OPNsense heading. The application name comes from Duo Admin.'),
+                'validate' => function ($value) {
+                    return preg_match('/^[\p{L}\p{N} ._()\/:-]{0,60}$/u', (string)($value ?? ''))
+                        ? [] : [gettext('Use at most 60 letters, digits, spaces or basic punctuation.')];
+                }
+            ],
+            'duo_push_firewall' => [
+                'name' => gettext('Duo Push firewall label (optional)'),
+                'type' => 'text',
+                'help' => gettext('Leave blank to show the firewall hostname automatically.'),
+                'validate' => function ($value) {
+                    return preg_match('/^[\p{L}\p{N} ._()\/:-]{0,100}$/u', (string)($value ?? ''))
+                        ? [] : [gettext('Invalid firewall display label.')];
+                }
+            ],
+            'duo_push_service' => [
+                'name' => gettext('Duo Push service label'),
+                'type' => 'text',
+                'default' => 'Web GUI',
+                'help' => gettext('Shown in Duo Push details as Service. Leave blank to omit that line.'),
+                'validate' => function ($value) {
+                    return preg_match('/^[\p{L}\p{N} ._()\/:-]{0,100}$/u', (string)($value ?? ''))
+                        ? [] : [gettext('Invalid service display label.')];
+                }
+            ],
             'duo_host' => [
                 'name' => gettext('Duo API hostname'),
                 'type' => 'text',
@@ -132,20 +163,32 @@ HTML;
                 if (in_array('push', $device['capabilities'] ?? [], true)) { $push = true; break; }
             }
             if (!$push) { return false; }
+            $pushType = (string)($this->serverProperties['push_type'] ?? '');
+            $firewallLabel = (string)($this->serverProperties['push_firewall'] ?? '');
+            if ($firewallLabel === '') {
+                $firewallLabel = $fqdn;
+            }
+            $serviceLabel = (string)($this->serverProperties['push_service'] ?? 'Web GUI');
+            $pushInfo = ['Firewall' => $firewallLabel];
+            if ($serviceLabel !== '') {
+                $pushInfo['Service'] = $serviceLabel;
+            }
+            if ($ip !== null) {
+                $pushInfo['Source IP'] = $ip;
+            }
             $args = [
                 'username' => (string)$username,
                 'factor' => 'push',
                 'device' => 'auto',
-                'type' => 'OPNsense Web GUI Login',
                 'display_username' => (string)$username,
                 'hostname' => $fqdn,
-                'pushinfo' => http_build_query([
-                    'Firewall' => $fqdn,
-                    'Service' => 'Web GUI Administration',
-                    'Source IP' => $ip ?? 'Unavailable',
-                    'Authentication' => 'Administrative Login'
-                ], '', '&', PHP_QUERY_RFC3986)
+                'pushinfo' => http_build_query($pushInfo, '', '&', PHP_QUERY_RFC3986)
             ];
+            // An absent type lets Duo Mobile use its own concise login prompt.
+            // Sending one creates "<type>: <Duo application name>".
+            if ($pushType !== '') {
+                $args['type'] = $pushType;
+            }
             if ($ip !== null) { $args['ipaddr'] = $ip; }
             $result = self::request($config, 'POST', '/auth/v2/auth', $args);
             return ($result['response']['result'] ?? '') === 'allow'

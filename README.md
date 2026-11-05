@@ -2,7 +2,7 @@
 
 Experimental OPNsense authentication connector: local database password + Duo Push over the Auth API.
 
-Configure **IKEY, SKEY and API hostname together** in **System → Access → Servers**. The SKEY is displayed as a normal masked password input and is saved with its server. The **Test Duo connection** button checks the Auth API credentials without a Push.
+Configure **IKEY, SKEY and API hostname together** in **System → Access → Servers**. The SKEY is displayed as a normal masked password input and is saved with its server. The **Test Duo connection** button checks the Auth API credentials without a Push. Duo Push display title, firewall label and service label are configurable per authentication server.
 
 See [plugin README](security/localduo/README.md) for migration and security details.
 
