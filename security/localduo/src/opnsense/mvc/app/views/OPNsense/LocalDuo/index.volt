@@ -1,5 +1,3 @@
-{% extends "layouts/default.volt" %}
-{% block content %}
 <div class="content-box" style="padding:20px;max-width:760px">
  <h2>Duo MFA for OPNsense local users</h2>
  <p>Configure the Duo Auth API integration used after native OPNsense password verification.</p>
@@ -12,8 +10,6 @@
  <p id="duo_message" role="status" style="margin-top:15px"></p>
  <hr><p><strong>Security:</strong> The secret is never returned to the browser. An empty secret field preserves the existing value. The secret is stored in OPNsense config.xml and therefore may be present in configuration backups.</p>
 </div>
-{% endblock %}
-{% block javascript %}
 <script>
 $(function(){
   const api='/api/localduo/settings/';
@@ -38,4 +34,3 @@ $(function(){
   load();
 });
 </script>
-{% endblock %}
