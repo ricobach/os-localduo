@@ -17,7 +17,7 @@ openssl rsa -in localduo-repo-private.pem -pubout -out localduo-repo-public.pem
 base64 < localduo-repo-private.pem | tr -d '\n'
 ```
 
-Store the resulting base64 string as the GitHub Actions **repository secret** `PKG_REPO_SIGNING_KEY_B64`. Never commit the private key, base64 secret, or a generated key in this source repository. Back up the private key securely for future repository updates. The public key may be distributed separately for client verification.
+Store the resulting base64 string as the GitHub Actions **repository secret** `PKG_REPO_SIGNING_KEY_B64`. Never commit the private key, base64 secret, or a generated key in this source repository. Back up the private key securely for future repository updates. The public key is published in this repository at `keys/localduo-repo-public.pem` and copied to GitHub Pages after successful signing. The workflow checks that it matches the configured private signing key before publishing.
 
 In GitHub repository **Settings → Pages**, select **GitHub Actions** as the deployment source.
 
@@ -29,9 +29,43 @@ https://ricobach.github.io/os-localduo/26.7/amd64/
 
 Do **not** configure the firewall repository before the workflow has succeeded, the public key has been independently verified and the package has been lab-tested.
 
+## Public key distribution
+
+The public key is committed here:
+
+```text
+https://raw.githubusercontent.com/ricobach/os-localduo/main/keys/localduo-repo-public.pem
+```
+
+A successful signed build also publishes it at:
+
+```text
+https://ricobach.github.io/os-localduo/localduo-repo-public.pem
+```
+
+It is an RSA-4096 public key. Its **SHA-256 digest of the DER-encoded SubjectPublicKeyInfo** is:
+
+```text
+9f162d139f7504c586cd868383d99658ec4e73207ec118dc8979bb1d90735ea7
+```
+
+To check the digest on a computer with OpenSSL:
+
+```sh
+openssl pkey -pubin -in localduo-repo-public.pem -outform DER | openssl dgst -sha256
+```
+
+Compare the fingerprint with an independently trusted copy before configuring a new client. A key hosted alongside the repository cannot independently establish the repository's authenticity.
+
 ## Client-side repository configuration (ONLY after verified signed publish)
 
-Copy the corresponding public key to a trusted file on the test firewall, e.g. `/usr/local/etc/pkg/localduo.pub`. Ensure the exact public key matches the maintained private key, not an arbitrary downloaded replacement.
+Download the committed public key to a trusted file on the test firewall (and verify its fingerprint independently):
+
+```sh
+fetch -o /usr/local/etc/pkg/localduo.pub https://raw.githubusercontent.com/ricobach/os-localduo/main/keys/localduo-repo-public.pem
+```
+
+The publishing workflow verifies that this public key matches the private signer.
 
 ```text
 # /usr/local/etc/pkg/repos/localduo.conf

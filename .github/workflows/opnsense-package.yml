@@ -57,8 +57,18 @@ jobs:
               cp "$pkg_file" "$repo/"
               umask 077
               echo "$PKG_REPO_SIGNING_KEY_B64" | base64 -d > /tmp/localduo-signing.pem
+              # Verify that the key customers download matches the private signer.
+              openssl pkey -in /tmp/localduo-signing.pem -pubout -outform DER > /tmp/localduo-actual-public.der
+              openssl pkey -pubin -in "${GITHUB_WORKSPACE}/keys/localduo-repo-public.pem" -outform DER > /tmp/localduo-published-public.der
+              if ! cmp -s /tmp/localduo-actual-public.der /tmp/localduo-published-public.der; then
+                echo "Public key does not match signing private key; refusing to publish" >&2
+                rm -f /tmp/localduo-signing.pem /tmp/localduo-actual-public.der /tmp/localduo-published-public.der
+                exit 1
+              fi
+              rm -f /tmp/localduo-actual-public.der /tmp/localduo-published-public.der
               pkg repo "$repo" "rsa:/tmp/localduo-signing.pem"
               rm -f /tmp/localduo-signing.pem
+              cp "${GITHUB_WORKSPACE}/keys/localduo-repo-public.pem" "${GITHUB_WORKSPACE}/site/localduo-repo-public.pem"
               ls -lah "$repo"
               test -s "$repo/meta.conf"
               test -s "$repo/data.pkg"
@@ -80,6 +90,7 @@ jobs:
               <p><strong>Build:</strong> OPNsense 26.7 / amd64. Pre-production; test in a lab before deploying.</p>
               <p><a href="./26.7/amd64/meta.conf">Repository metadata (meta.conf)</a></p>
               <p><a href="https://github.com/ricobach/os-localduo">Source code and installation guidance</a></p>
+              <p><a href="./localduo-repo-public.pem">RSA package repository public key</a></p>
               <p>The package repository is for the FreeBSD <code>pkg</code> client, not a browsable directory listing. Verify the signing key out-of-band before trusting the repository.</p>
             </body>
             </html>
