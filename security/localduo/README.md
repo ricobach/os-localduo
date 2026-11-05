@@ -1,48 +1,36 @@
-# os-localduo (prototype)
+# os-localduo v0.5 (experimental)
 
-OPNsense plugin source for local-password authentication followed by Duo Auth API Push.
+OPNsense authentication connector: native local database password validation followed by Duo Auth API Push.
 
-## Important status
-This is a **source package / pre-production prototype**, not a compiled or signed FreeBSD `.pkg`. It has not been executed on an OPNsense firewall. Verify GUI routes, ACL and request context against your installed OPNsense version before production use.
+## Configure in the native server editor
 
-## Features
-- Authentication connector `localduo` extending built-in `Local` password validation.
-- Duo Auth API v2 using HMAC-SHA512 v5 signing and HTTPS.
-- Fail closed on Duo reject, bypass, unenrolled users, transport errors.
-- GUI settings at `System → Access → Duo MFA`, with write-only secret update.
-- Duo `/auth/v2/check` credential test (no Push).
-- Firewall FQDN from native OPNsense hostname/domain settings.
-- Conditional source IP; cannot guarantee correct IP without integration at login request entry point.
+Go to **System → Access → Servers**, add or edit an authentication server of type **Local Database + Duo Push**, and configure:
 
-## Installation (staging/testing)
-From the `security/localduo` directory in an **OPNsense plugin build environment**, use `make package` in the standard `opnsense/plugins` tree. The build environment requires `Mk/plugins.mk` from that repository.
+- **Duo integration key (IKEY)**
+- **Duo secret key (SKEY)**
+- **Duo API hostname**
 
-For a lab-only source overlay, copy the **contents** of `src/` into `/usr/local/` preserving paths. Back up any previous `LocalDuo.php` before overlaying. Restart PHP/GUI services as appropriate for the release, and confirm the authentication connector loads. Do not enable the new authenticator until tests pass.
+Create an Auth API integration in Duo first. A given server now uses **its own credentials**. You can create different localduo servers with different Duo applications. The former custom **System → Access → Duo MFA** settings page and its API have been removed.
 
-## Configure
-1. Create a Duo **Auth API** application (not a RADIUS-only application).
-2. Enter integration key, secret key and API hostname via `System → Access → Duo MFA`.
-3. Save and press **Check saved API credentials**.
-4. Create a new authentication server under `System → Access → Servers`, type `Local Database + Duo Push` (type ID `localduo`).
-5. Test with `System → Access → Tester`, including invalid password, denied Push, timeout, bypass account and successful approval.
-6. Keep the existing Web GUI session and console recovery available. Only then set the new GUI auth server.
+Keep an existing management session and console recovery available. Run **System → Access → Tester** before switching the GUI authentication server. Test approved/denied Push, wrong password, network failure and user bypass handling.
 
-## Security limitations / TODO before production
-- No Verified Duo Push/number matching; ordinary Push only. Do not assume a Verified Push-required policy is enforced. Duo may ignore that policy without client capability advertisement.
-- Source IP may be missing or incorrect in a backend request context. Do not treat it as guaranteed. Do not trust arbitrary forwarded headers.
-- `skey` is stored in OPNsense `config.xml` and its backups, and is not encrypted at rest. API never returns the secret.
-- Ensure the `page-system-localduo` ACL is restricted to trusted administrators; audit permissions before deployment.
-- A user with local-only GUI authentication configured in addition to LocalDuo may bypass MFA; keep fallback console recovery separate.
-- `GET /auth/v2/check` validates credentials, it does not exercise actual Push.
-- Test compatibility with actual OPNsense release and UI framework. GUI API methods are illustrative until verified live.
-- Review synchronous Duo timeout against Web GUI authentication worker timeouts.
-- Removal should not delete user configuration or break recovery. Do not remove while it is selected as the only GUI authenticator.
+## Migration from v0.4
 
-## Duo settings storage
-`<OPNsense><LocalDuo><general><ikey>…</ikey><skey>…</skey><host>…</host></general></LocalDuo></OPNsense>`
+The existing global Duo credentials remain in OPNsense `config.xml`, unchanged by this upgrade. For compatibility, a selected localduo authentication server **without any of the three new fields** can continue using the global credentials. This is a **temporary** fallback; migrate each server by filling all three fields, testing, and confirming the selected server. Once complete, remove the legacy credentials via an administrator-controlled configuration change after a verified backup. Do not remove them until every server has been migrated.
 
-## Files
-- `src/opnsense/mvc/app/library/OPNsense/Auth/LocalDuo.php`: authentication connector.
-- `src/opnsense/mvc/app/controllers/OPNsense/LocalDuo/Api/SettingsController.php`: write-only secret settings and credential test.
-- `src/opnsense/mvc/app/views/OPNsense/LocalDuo/index.volt`: GUI.
-- `src/opnsense/mvc/app/models/OPNsense/LocalDuo/{ACL,Menu}`: permissions/menu.
+If even one of the three new fields is set, all three are required; no partial fallback is allowed.
+
+## Security caveat: native OPNsense authserver editor
+
+**OPNsense 26.7's pluggable authentication-server editor only supports text, dropdown, and checkbox fields. It has no write-only/password field type for plugin options.** Accordingly, when configuring SKEY in the server editor, it appears as a *plain text field*, including when reopening an existing server. This is **less protective** than the previous write-only settings API. Limit privileges for editing authentication servers, secure OPNsense backups, and do not deploy in production unless this exposure is acceptable. A truly masked/write-only field requires core OPNsense support or an alternative secured editor.
+
+All three server fields are stored in `config.xml` under `system/authserver` (secrets are not encrypted at rest). The legacy global secret is not removed automatically.
+
+## Remaining limitations
+
+- Prototype: requires installation testing on the target OPNsense release.
+- Duo Verified Push number matching is not implemented or enforced.
+- `REMOTE_ADDR` may be absent or represent a backend process rather than the browser. Never trust unverified forwarded headers.
+- Synchronous Duo Push requests may exceed GUI timeout; test.
+- Keep break-glass console access and avoid configuring a local-only Web GUI fallback that bypasses MFA.
+- Duo `/auth/v2/check` connectivity testing is no longer provided by a separate GUI button; use the authentication tester for end-to-end testing.

@@ -1,9 +1,0 @@
-<acl>
-  <page-system-localduo>
-    <name>System: Duo MFA settings</name>
-    <patterns>
-      <pattern>ui/localduo/*</pattern>
-      <pattern>api/localduo/settings/*</pattern>
-    </patterns>
-  </page-system-localduo>
-</acl>

@@ -1,9 +1,11 @@
 # os-localduo
 
-Prototype OPNsense plugin for local database password authentication followed by Duo Auth API Push over HTTPS.
+Experimental OPNsense authentication plugin: native local database password + Duo Push via Auth API HTTPS.
 
-Source code lives in `security/localduo/` (OPNsense plugins tree layout).
+Configure your Duo integration **per authentication server** under **System → Access → Servers**.
 
-**Pre-production only:** Not built or tested against an installed OPNsense release. Maintain console recovery and test in a lab before selecting it for Web GUI authentication. Ordinary Duo Push only; Verified Push is not supported. The Duo secret is stored in OPNsense config.xml and backups.
+**Security warning:** OPNsense 26.7's third-party authserver fields do not support write-only secrets, so SKEY is visible as text when editing a server. Restrict authserver administration. Secrets are also stored in config.xml and backups.
 
-See [plugin README](security/localduo/README.md) for configuration and security limitations.
+The connector retains a temporary fallback for existing v0.4 global Duo settings. See [migration and security notes](security/localduo/README.md).
+
+**Pre-production:** Keep a console recovery path and test before using this as the sole GUI authentication service. Verified Duo Push is not supported.

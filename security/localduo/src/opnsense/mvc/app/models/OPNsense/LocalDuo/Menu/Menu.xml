@@ -1,7 +1,0 @@
-<menu>
-  <System>
-    <Access>
-      <LocalDuo VisibleName="Duo MFA" url="/ui/localduo" order="95" />
-    </Access>
-  </System>
-</menu>
