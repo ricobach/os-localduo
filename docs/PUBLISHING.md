@@ -57,6 +57,20 @@ openssl pkey -pubin -in localduo-repo-public.pem -outform DER | openssl dgst -sh
 
 Compare the fingerprint with an independently trusted copy before configuring a new client. A key hosted alongside the repository cannot independently establish the repository's authenticity.
 
+## Automated repository setup and installation
+
+The [scripts/install.sh](../scripts/install.sh) script embeds the committed PEM public key and validates its SHA-256 digest. It creates both local key and repository configuration, refreshes package metadata and installs os-localduo. The signature scheme remains `pubkey`.
+
+```sh
+fetch -o /tmp/localduo-install.sh https://raw.githubusercontent.com/ricobach/os-localduo/main/scripts/install.sh
+less /tmp/localduo-install.sh
+sh /tmp/localduo-install.sh
+```
+
+Use `sh /tmp/localduo-install.sh --repo-only` to configure only the repository. After reviewing the script, the alternative `curl -fsSL https://raw.githubusercontent.com/ricobach/os-localduo/main/scripts/install.sh | sh` is available. Do not run unreviewed remote shell scripts as root.
+
+The script refuses to replace any existing, different key or repo configuration. Check the pinned fingerprint independently: verifying a key embedded in a downloaded installer is not, by itself, a trust bootstrap.
+
 ## Client-side repository configuration (ONLY after verified signed publish)
 
 Download the committed public key to a trusted file on the test firewall (and verify its fingerprint independently):
