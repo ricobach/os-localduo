@@ -40,6 +40,7 @@ jobs:
             cp -R security/localduo /tmp/opnsense-plugins/security/localduo
             cd /tmp/opnsense-plugins/security/localduo
             make check
+            php -l src/opnsense/mvc/app/library/OPNsense/Auth/LocalDuo.php
             make package
 
             mkdir -p "${GITHUB_WORKSPACE}/dist/packages" "${GITHUB_WORKSPACE}/site/26.7/amd64"

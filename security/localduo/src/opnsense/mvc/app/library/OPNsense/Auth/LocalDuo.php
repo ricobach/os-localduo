@@ -142,7 +142,7 @@ class LocalDuo extends Local
         if (!preg_match('/^DI[A-Za-z0-9]{12,38}$/', $ikey) ||
             !preg_match('/^[A-Za-z0-9]{20,120}$/', $skey) ||
             !preg_match('/^api-[a-z0-9-]+\\.duosecurity\\.com$/', $host)) {
-            throw new \\RuntimeException('Duo server credentials missing or invalid');
+            throw new \RuntimeException('Duo server credentials missing or invalid');
         }
         return compact('ikey', 'skey', 'host');
     }
