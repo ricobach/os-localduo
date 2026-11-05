@@ -56,7 +56,7 @@ jobs:
               cp "$pkg_file" "$repo/"
               umask 077
               echo "$PKG_REPO_SIGNING_KEY_B64" | base64 -d > /tmp/localduo-signing.pem
-              pkg repo -s /tmp/localduo-signing.pem "$repo"
+              pkg repo "$repo" "rsa:/tmp/localduo-signing.pem"
               rm -f /tmp/localduo-signing.pem
               test -f "$repo/meta.txz" -o -f "$repo/meta.pkg"
             else
