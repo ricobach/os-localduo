@@ -23,6 +23,8 @@ class SettingsController extends ApiControllerBase
             LocalDuo::request(compact('ikey', 'skey', 'host'), 'GET', '/auth/v2/check');
             return ['status' => 'ok', 'message' => 'Duo API connection successful'];
         } catch (\Throwable $e) {
+            $reason = LocalDuo::diagnosticReason($e);
+            syslog(LOG_NOTICE, 'LocalDuo: context=connection_test outcome=failed reason=' . $reason);
             return ['status' => 'failed', 'message' => 'Duo API connection or credentials failed'];
         }
     }

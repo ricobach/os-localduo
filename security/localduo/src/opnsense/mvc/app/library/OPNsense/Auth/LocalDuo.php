@@ -135,9 +135,36 @@ HTML;
         ];
     }
 
+    /** Translate only our own known exceptions to safe, fixed log codes. */
+    public static function diagnosticReason(\Throwable $error): string
+    {
+        $codes = [
+            'duo_configuration_invalid', 'duo_api_timeout', 'duo_dns_failure',
+            'duo_connection_failed', 'duo_tls_failed', 'duo_network_error',
+            'duo_api_unauthorized', 'duo_api_rate_limited', 'duo_api_server_error',
+            'duo_api_http_error', 'duo_api_rejected', 'duo_invalid_response'
+        ];
+        $reason = $error->getMessage();
+        return $error instanceof \RuntimeException && in_array($reason, $codes, true)
+            ? $reason : 'duo_unexpected_error';
+    }
+
+    private static function logAuthFailure(string $reason, $username): void
+    {
+        // No passwords, keys, API responses, or unfiltered exception strings.
+        $user = substr(preg_replace('/[^A-Za-z0-9_.@+-]/', '_', (string)$username), 0, 96);
+        $ip = $_SERVER['REMOTE_ADDR'] ?? null;
+        $source = is_string($ip) && filter_var($ip, FILTER_VALIDATE_IP) ? $ip : 'unavailable';
+        syslog(LOG_NOTICE, sprintf(
+            'LocalDuo: context=login outcome=deny reason=%s user=%s source=%s',
+            $reason, $user !== '' ? $user : 'unknown', $source
+        ));
+    }
+
     protected function _authenticate($username, $password)
     {
         if (!parent::_authenticate($username, $password)) {
+            self::logAuthFailure('local_password_rejected', $username);
             return false;
         }
         try {
@@ -147,7 +174,6 @@ HTML;
             $domain = trim((string)($system->domain ?? ''));
             $fqdn = $name === '' ? (gethostname() ?: 'OPNsense') :
                 ($domain !== '' && strpos($name, '.') === false ? $name . '.' . $domain : $name);
-            // REMOTE_ADDR may be unavailable if authentication executes outside the web process.
             $ip = $_SERVER['REMOTE_ADDR'] ?? null;
             if (!is_string($ip) || !filter_var($ip, FILTER_VALIDATE_IP)) {
                 $ip = null;
@@ -155,14 +181,24 @@ HTML;
             $pre = ['username' => (string)$username];
             if ($ip !== null) { $pre['ipaddr'] = $ip; }
             $resp = self::request($config, 'POST', '/auth/v2/preauth', $pre);
-            if (($resp['response']['result'] ?? '') !== 'auth') { return false; }
-            // NOTE: Not supporting Verified Push. Deploy only with a policy that permits regular Push.
+            $preResult = $resp['response']['result'] ?? null;
+            if ($preResult !== 'auth') {
+                self::logAuthFailure(
+                    $preResult === 'deny' ? 'duo_preauth_denied' : 'duo_preauth_not_authorized',
+                    $username
+                );
+                return false;
+            }
+            // Ordinary Push only, not Verified Push.
             $devices = $resp['response']['devices'] ?? [];
             $push = false;
             foreach ($devices as $device) {
                 if (in_array('push', $device['capabilities'] ?? [], true)) { $push = true; break; }
             }
-            if (!$push) { return false; }
+            if (!$push) {
+                self::logAuthFailure('duo_push_unavailable', $username);
+                return false;
+            }
             $pushType = (string)($this->serverProperties['push_type'] ?? '');
             $firewallLabel = (string)($this->serverProperties['push_firewall'] ?? '');
             if ($firewallLabel === '') {
@@ -184,17 +220,20 @@ HTML;
                 'hostname' => $fqdn,
                 'pushinfo' => http_build_query($pushInfo, '', '&', PHP_QUERY_RFC3986)
             ];
-            // An absent type lets Duo Mobile use its own concise login prompt.
-            // Sending one creates "<type>: <Duo application name>".
-            if ($pushType !== '') {
-                $args['type'] = $pushType;
-            }
+            if ($pushType !== '') { $args['type'] = $pushType; }
             if ($ip !== null) { $args['ipaddr'] = $ip; }
             $result = self::request($config, 'POST', '/auth/v2/auth', $args);
-            return ($result['response']['result'] ?? '') === 'allow'
-                && ($result['response']['status'] ?? '') === 'allow';
+            $approval = $result['response'] ?? null;
+            if (($approval['result'] ?? null) === 'allow' &&
+                ($approval['status'] ?? null) === 'allow') {
+                return true;
+            }
+            $denied = ($approval['result'] ?? null) === 'deny' ||
+                ($approval['status'] ?? null) === 'deny';
+            self::logAuthFailure($denied ? 'duo_push_denied' : 'duo_push_not_approved', $username);
+            return false;
         } catch (\Throwable $e) {
-            syslog(LOG_ERR, 'LocalDuo: authentication failed or Duo unavailable');
+            self::logAuthFailure(self::diagnosticReason($e), $username);
             return false;
         }
     }
@@ -253,7 +292,7 @@ HTML;
         if (!preg_match('/^DI[A-Za-z0-9]{12,38}$/', $ikey) ||
             !preg_match('/^[A-Za-z0-9]{20,120}$/', $skey) ||
             !preg_match('/^api-[a-z0-9-]+\\.duosecurity\\.com$/', $host)) {
-            throw new \RuntimeException('Duo credentials missing or invalid');
+            throw new \RuntimeException('duo_configuration_invalid');
         }
     }
 
@@ -298,12 +337,46 @@ HTML;
             ]);
             if ($method === 'POST') { curl_setopt($ch, CURLOPT_POSTFIELDS, $body); }
             $raw = curl_exec($ch);
-            if ($raw === false || curl_getinfo($ch, CURLINFO_HTTP_CODE) !== 200) {
-                throw new \RuntimeException('Duo HTTPS request failed');
+            if ($raw === false) {
+                // Numeric cURL error only; curl_error() can include sensitive data.
+                switch (curl_errno($ch)) {
+                    case CURLE_OPERATION_TIMEDOUT:
+                        $reason = 'duo_api_timeout'; break;
+                    case CURLE_COULDNT_RESOLVE_HOST:
+                        $reason = 'duo_dns_failure'; break;
+                    case CURLE_COULDNT_CONNECT:
+                        $reason = 'duo_connection_failed'; break;
+                    case CURLE_SSL_CONNECT_ERROR:
+                    case CURLE_PEER_FAILED_VERIFICATION:
+                        $reason = 'duo_tls_failed'; break;
+                    default:
+                        $reason = 'duo_network_error';
+                }
+                throw new \RuntimeException($reason);
             }
-            $result = json_decode($raw, true, 512, JSON_THROW_ON_ERROR);
-            if (!is_array($result) || ($result['stat'] ?? '') !== 'OK') {
-                throw new \RuntimeException('Duo API rejected request');
+            $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            if ($httpCode !== 200) {
+                if ($httpCode === 401 || $httpCode === 403) {
+                    $reason = 'duo_api_unauthorized';
+                } elseif ($httpCode === 429) {
+                    $reason = 'duo_api_rate_limited';
+                } elseif ($httpCode >= 500) {
+                    $reason = 'duo_api_server_error';
+                } else {
+                    $reason = 'duo_api_http_error';
+                }
+                throw new \RuntimeException($reason);
+            }
+            try {
+                $result = json_decode($raw, true, 512, JSON_THROW_ON_ERROR);
+            } catch (\JsonException $e) {
+                throw new \RuntimeException('duo_invalid_response');
+            }
+            if (!is_array($result) || !isset($result['stat'])) {
+                throw new \RuntimeException('duo_invalid_response');
+            }
+            if ($result['stat'] !== 'OK') {
+                throw new \RuntimeException('duo_api_rejected');
             }
             return $result;
         } finally {

@@ -39,3 +39,9 @@ A v0.6-only SKEY is stored separately, so when you first upgrade to v0.7 the inl
 - Browser source IP may be unavailable to backend authentication.
 - Test failure and success cases while keeping an existing administrator session and console recovery.
 - Duo connection test API access is controlled by a separate plugin ACL; grant it to trusted users only.
+
+## Safe diagnostic logging
+
+LocalDuo logs fixed reason codes, sanitized usernames and validated source IP addresses for failed logins. Failed connection tests log the same transport and API reason codes. Neither path logs passwords, SKEY, IKEY, Duo response bodies, signatures, raw exception strings or endpoint URLs.
+
+Examples: local_password_rejected, duo_preauth_denied, duo_preauth_not_authorized, duo_push_unavailable, duo_push_denied, duo_push_not_approved, duo_configuration_invalid, duo_api_timeout, duo_dns_failure, duo_connection_failed, duo_tls_failed, duo_network_error, duo_api_unauthorized, duo_api_rate_limited, duo_api_server_error, duo_api_http_error, duo_api_rejected, duo_invalid_response and duo_unexpected_error. All errors continue to fail closed.
