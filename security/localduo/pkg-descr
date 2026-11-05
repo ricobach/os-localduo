@@ -1,0 +1,3 @@
+Authenticate OPNsense local users with Duo Auth API over HTTPS.
+Includes an administrative settings page with write-only secret handling.
+Requires an appropriate Duo Auth API integration.
