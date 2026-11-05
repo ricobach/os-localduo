@@ -9,7 +9,6 @@ class LocalDuo extends Local
     public static function getType() { return 'localduo'; }
     public function getDescription() { return gettext('Local Database + Duo Push'); }
 
-    /** Settings are supplied by the selected System > Access > Servers entry. */
     private $serverProperties = [];
 
     public function setProperties($config)
@@ -17,38 +16,23 @@ class LocalDuo extends Local
         parent::setProperties($config);
         $this->serverProperties = [
             'ikey' => trim((string)($config['duo_ikey'] ?? '')),
-            'skey' => (string)($config['duo_skey'] ?? ''),
-            'host' => strtolower(trim((string)($config['duo_host'] ?? '')))
+            'host' => strtolower(trim((string)($config['duo_host'] ?? ''))),
+            'legacy_skey' => (string)($config['duo_skey'] ?? '')
         ];
     }
 
-    /**
-     * OPNsense's native authserver editor supports only text, dropdown and checkbox
-     * for plugin fields. The Duo SKEY is therefore visible to users who can edit
-     * authentication servers. Restrict that privilege until upstream offers
-     * a write-only password field.
-     */
     public function getConfigurationOptions()
     {
         return [
             'duo_ikey' => [
                 'name' => gettext('Duo integration key (IKEY)'),
                 'type' => 'text',
-                'help' => gettext('Integration key of your Duo Auth API application.'),
+                'help' => gettext('Enter the Duo Auth API integration key. Manage the write-only secret and test connectivity at ') .
+                    '<a href="/ui/localduo" target="_blank" rel="noopener noreferrer">Duo credential manager</a>.',
                 'validate' => function ($value) {
                     return $value === null || $value === '' ||
                         preg_match('/^DI[A-Za-z0-9]{12,38}$/', (string)$value)
                         ? [] : [gettext('Invalid Duo integration key.')];
-                }
-            ],
-            'duo_skey' => [
-                'name' => gettext('Duo secret key (SKEY)'),
-                'type' => 'text',
-                'help' => gettext('Sensitive: native OPNsense authserver fields display this value when editing. Restrict access to server administration.'),
-                'validate' => function ($value) {
-                    return $value === null || $value === '' ||
-                        preg_match('/^[A-Za-z0-9]{20,120}$/', (string)$value)
-                        ? [] : [gettext('Invalid Duo secret key.')];
                 }
             ],
             'duo_host' => [
@@ -116,35 +100,62 @@ class LocalDuo extends Local
         }
     }
 
-    /**
-     * Prefer credentials belonging to the selected authentication server.
-     * Older v0.4 installations may still have global credentials; permit
-     * those only when the entire per-server configuration is absent.
-     * Incomplete per-server settings are a hard error, never silently
-     * mixed with global settings.
-     */
     private function credentials(): array
     {
-        $settings = $this->serverProperties;
-        $ikey = trim((string)($settings['ikey'] ?? ''));
-        $skey = (string)($settings['skey'] ?? '');
-        $host = strtolower(trim((string)($settings['host'] ?? '')));
+        $ikey = (string)($this->serverProperties['ikey'] ?? '');
+        $host = (string)($this->serverProperties['host'] ?? '');
+        $legacySecret = (string)($this->serverProperties['legacy_skey'] ?? '');
 
-        if ($ikey === '' && $skey === '' && $host === '') {
-            // Temporary compatibility path for existing configured servers.
-            $root = Config::getInstance()->object();
-            $legacy = $root->OPNsense->LocalDuo->general ?? null;
+        // Preserve working pre-v0.5 servers while migrating to per-server configuration.
+        if ($ikey === '' && $host === '' && $legacySecret === '') {
+            $cfg = Config::getInstance()->object();
+            $legacy = $cfg->OPNsense->LocalDuo->general ?? null;
             $ikey = trim((string)($legacy->ikey ?? ''));
-            $skey = (string)($legacy->skey ?? '');
             $host = strtolower(trim((string)($legacy->host ?? '')));
+            $legacySecret = (string)($legacy->skey ?? '');
         }
 
+        $skey = self::lookupSecret($ikey);
+        if ($skey === '') {
+            $skey = $legacySecret;
+        }
+        if ($skey === '') {
+            $cfg = Config::getInstance()->object();
+            $legacy = $cfg->OPNsense->LocalDuo->general ?? null;
+            if ((string)($legacy->ikey ?? '') === $ikey) {
+                $skey = (string)($legacy->skey ?? '');
+            }
+        }
+
+        self::assertCredentials($ikey, $skey, $host);
+        return compact('ikey', 'skey', 'host');
+    }
+
+    /** Lookup a secret by IKEY without exposing it through the API. */
+    public static function lookupSecret(string $ikey): string
+    {
+        if ($ikey === '') {
+            return '';
+        }
+        $root = Config::getInstance()->object();
+        $entries = $root->OPNsense->LocalDuo->secrets ?? null;
+        if ($entries !== null) {
+            foreach ($entries->children() as $entry) {
+                if ((string)($entry->ikey ?? '') === $ikey) {
+                    return (string)($entry->skey ?? '');
+                }
+            }
+        }
+        return '';
+    }
+
+    public static function assertCredentials(string $ikey, string $skey, string $host): void
+    {
         if (!preg_match('/^DI[A-Za-z0-9]{12,38}$/', $ikey) ||
             !preg_match('/^[A-Za-z0-9]{20,120}$/', $skey) ||
             !preg_match('/^api-[a-z0-9-]+\\.duosecurity\\.com$/', $host)) {
-            throw new \RuntimeException('Duo server credentials missing or invalid');
+            throw new \RuntimeException('Duo credentials missing or invalid');
         }
-        return compact('ikey', 'skey', 'host');
     }
 
     /** HMAC-SHA512 Duo v5 signature and HTTPS request. */
