@@ -17,25 +17,69 @@ class LocalDuo extends Local
         $this->serverProperties = [
             'ikey' => trim((string)($config['duo_ikey'] ?? '')),
             'host' => strtolower(trim((string)($config['duo_host'] ?? ''))),
-            'legacy_skey' => (string)($config['duo_skey'] ?? '')
+            'skey' => (string)($config['duo_skey'] ?? '')
         ];
     }
 
     public function getConfigurationOptions()
     {
+        /*
+         * OPNsense 26.7's generic authserver editor only exposes "text",
+         * "dropdown" and "checkbox" extension fields. It loads their saved
+         * values and writes posted values back to config.xml.
+         *
+         * Use normal persistence for SKEY and convert the browser input to
+         * password type on DOM ready. This provides visual masking only:
+         * the value remains accessible in page source / developer tools.
+         */
+        $duoControls = <<<'HTML'
+ <button id="localduo_test" type="button" class="btn btn-default btn-xs">Test Duo connection</button>
+ <span id="localduo_test_status" role="status" style="display:block;font-size:12px;margin-top:5px;"></span>
+ <script>
+ $(function () {
+     'use strict';
+     var secret = $('input[name="duo_skey"]');
+     if (!secret.length) {
+         return;
+     }
+     secret.attr('type', 'password').attr('autocomplete', 'new-password');
+     $('#localduo_test').on('click', function () {
+         var button = $(this);
+         button.prop('disabled', true);
+         $('#localduo_test_status').text('Checking Duo API credentials...');
+         ajaxCall('/api/localduo/settings/check', {
+             ikey: $('input[name="duo_ikey"]').val(),
+             skey: secret.val(),
+             host: $('input[name="duo_host"]').val()
+         }, function (response) {
+             button.prop('disabled', false);
+             $('#localduo_test_status')
+                 .text(response.message || (response.status === 'ok' ? 'Connection successful' : 'Connection failed'))
+                 .css('color', response.status === 'ok' ? 'green' : 'red');
+         });
+     });
+ });
+ </script>
+HTML;
         return [
             'duo_ikey' => [
-                'name' => gettext('Duo integration key (IKEY)') .
-                    ' <a class="btn btn-default btn-xs" href="/ui/localduo" ' .
-                    'target="_blank" rel="noopener noreferrer">' .
-                    gettext('Configure SKEY / Test Duo') . '</a>',
+                'name' => gettext('Duo integration key (IKEY)'),
                 'type' => 'text',
-                'help' => gettext('Enter the Duo Auth API integration key. Manage the write-only secret and test connectivity at ') .
-                    '<a href="/ui/localduo" target="_blank" rel="noopener noreferrer">Duo credential manager</a>.',
+                'help' => gettext('Integration key for your Duo Auth API application.'),
                 'validate' => function ($value) {
                     return $value === null || $value === '' ||
                         preg_match('/^DI[A-Za-z0-9]{12,38}$/', (string)$value)
                         ? [] : [gettext('Invalid Duo integration key.')];
+                }
+            ],
+            'duo_skey' => [
+                'name' => gettext('Duo secret key (SKEY)') . $duoControls,
+                'type' => 'text',
+                'help' => gettext('Saved with the authentication server and displayed masked. Editing replaces it; admins can inspect it in HTML source.'),
+                'validate' => function ($value) {
+                    return $value === null || $value === '' ||
+                        preg_match('/^[A-Za-z0-9]{20,120}$/', (string)$value)
+                        ? [] : [gettext('Invalid Duo secret key.')];
                 }
             ],
             'duo_host' => [
@@ -44,7 +88,7 @@ class LocalDuo extends Local
                 'help' => gettext('Example: api-xxxxxxxx.duosecurity.com'),
                 'validate' => function ($value) {
                     return $value === null || $value === '' ||
-                        preg_match('/^api-[a-z0-9-]+\\.duosecurity\\.com$/i', (string)$value)
+                        preg_match('/^api-[a-z0-9-]+\.duosecurity\.com$/i', (string)$value)
                         ? [] : [gettext('Invalid Duo API hostname.')];
                 }
             ]
@@ -107,24 +151,24 @@ class LocalDuo extends Local
     {
         $ikey = (string)($this->serverProperties['ikey'] ?? '');
         $host = (string)($this->serverProperties['host'] ?? '');
-        $legacySecret = (string)($this->serverProperties['legacy_skey'] ?? '');
+        $skey = (string)($this->serverProperties['skey'] ?? '');
 
-        // Preserve working pre-v0.5 servers while migrating to per-server configuration.
-        if ($ikey === '' && $host === '' && $legacySecret === '') {
-            $cfg = Config::getInstance()->object();
-            $legacy = $cfg->OPNsense->LocalDuo->general ?? null;
+        // Compatibility with v0.4 global credentials.
+        if ($ikey === '' && $host === '' && $skey === '') {
+            $root = Config::getInstance()->object();
+            $legacy = $root->OPNsense->LocalDuo->general ?? null;
             $ikey = trim((string)($legacy->ikey ?? ''));
             $host = strtolower(trim((string)($legacy->host ?? '')));
-            $legacySecret = (string)($legacy->skey ?? '');
+            $skey = (string)($legacy->skey ?? '');
         }
 
-        $skey = self::lookupSecret($ikey);
+        // A newly saved inline SKEY takes priority over the v0.6 secret store.
         if ($skey === '') {
-            $skey = $legacySecret;
+            $skey = self::lookupSecret($ikey);
         }
         if ($skey === '') {
-            $cfg = Config::getInstance()->object();
-            $legacy = $cfg->OPNsense->LocalDuo->general ?? null;
+            $root = Config::getInstance()->object();
+            $legacy = $root->OPNsense->LocalDuo->general ?? null;
             if ((string)($legacy->ikey ?? '') === $ikey) {
                 $skey = (string)($legacy->skey ?? '');
             }

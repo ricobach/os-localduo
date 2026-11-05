@@ -1,34 +1,31 @@
-# os-localduo v0.6 (experimental)
+# os-localduo v0.7 (experimental)
 
-OPNsense local password verification + Duo Auth API Push.
+Native OPNsense authentication server: local password validation followed by Duo Auth API Push.
 
-## Configuration
+## Configure
 
-- Under **System → Access → Servers**, configure a server of type **Local Database + Duo Push** with its Duo integration key (IKEY) and API hostname.
-- Click the visible **Configure SKEY / Test Duo** button next to the IKEY field (or visit **/ui/localduo** directly) to store a write-only SKEY for that IKEY.
-- On the credential manager, click **Test Duo connection**. This calls Duo `/auth/v2/check` without sending Push.
-- Use **System → Access → Tester** for full end-to-end primary password + Duo Push validation.
+1. In **System → Access → Servers**, add or edit a server of type **Local Database + Duo Push**.
+2. Enter **Integration key (IKEY)**, **Secret key (SKEY)** and **API hostname** on the same form.
+3. Click **Test Duo connection** next to SKEY. It checks Duo /auth/v2/check using the entered credentials, without sending a Push.
+4. Save the authentication server normally.
+5. Use **System → Access → Tester** to verify local password + actual Duo Push.
 
-No separate **Duo MFA** sidebar menu is shipped by v0.6. The protected credential management page remains accessible from the authserver help link.
+The SKEY is a **standard password field** in the browser: it is populated from the saved server configuration, displayed masked, and resubmitted on Save. Changing the field replaces the stored value. No separate credential-management page remains.
 
-## Security
+## OPNsense 26.7 compatibility and security
 
-OPNsense 26.7's native authentication-server plugin field renderer does **not** support password-type/write-only fields. The SKEY is therefore intentionally **not present in the server editor**. It is stored via a separate ACL-protected write-only API, keyed by the Duo integration key. It can still be present in `config.xml` and backups, so protect both.
+OPNsense 26.7's pluggable authentication-server editor supports only text, dropdown and checkbox plugin fields. We register SKEY as a persisted text option and convert its input to type=password on DOM ready using trusted markup in the plugin-defined label. The authenticated page source still contains the populated secret, just as for other populated inputs. Masking does not provide encryption or protection from administrators with developer tools. The secret is stored in config.xml and backups.
 
-Upgrade migration: pre-v0.5 global SKEY and v0.5 inline server SKEY are accepted as temporary fallbacks. **Existing inline secrets might remain stored in config.xml even after disappearing from the editor.** Save the secret in the new credential manager and test before removing legacy values. Do not remove any old credentials without a config backup, tested recovery access, and a successful end-to-end Duo login.
+The editor integration assumes OPNsense continues rendering plugin labels and inline scripts. Verify it visually on the target release.
 
-## Stale menu after upgrade
+## Migration from v0.6
 
-If System → Access → Duo MFA persists after upgrading, first confirm `pkg info os-localduo` reports v0.6 and reload the GUI. The old menu file may have been left by a previous **manual source overlay** outside package management. Check:
-
-`ls -l /usr/local/opnsense/mvc/app/models/OPNsense/LocalDuo/Menu/Menu.xml`
-
-If it remains, back it up and remove this exact obsolete file, then restart the GUI; do not delete unrelated OPNsense menu files.
+A v0.6-only SKEY is stored separately, so when you first upgrade to v0.7 the inline SKEY field is empty. **Enter your SKEY once and save the server.** Until then, the authentication connector retains a temporary fallback to the v0.6 secret store or the older global credentials. Once saved, the inline SKEY takes priority. Legacy values are not deleted by the upgrade; back up and verify successful authentication before cleaning them up.
 
 ## Limitations
 
-- Experimental: not yet tested against the live firewall installation.
-- Verified Duo Push / number matching is not supported.
-- Browser source IP may be missing in background authentication processes.
-- Native Web GUI/worker timeouts may constrain synchronous Push handling.
-- Do not leave an alternative password-only GUI authenticator in place.
+- Experimental: install and runtime-test on a real OPNsense 26.7 firewall.
+- Ordinary Duo Push only; no Verified Push / number matching.
+- Browser source IP may be unavailable to backend authentication.
+- Test failure and success cases while keeping an existing administrator session and console recovery.
+- Duo connection test API access is controlled by a separate plugin ACL; grant it to trusted users only.
