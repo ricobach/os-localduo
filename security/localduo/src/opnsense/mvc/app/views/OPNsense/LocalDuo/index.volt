@@ -114,9 +114,6 @@ $(function () {
             } else {
                 showMessage(response.message || 'Failed to save Duo settings.', false);
             }
-        }).fail(function () {
-            $('#duo_save').prop('disabled', false);
-            showMessage('Unable to save Duo settings.', false);
         });
     });
 
@@ -128,9 +125,6 @@ $(function () {
                 response.message || (response.status === 'ok' ? 'Duo API connection verified.' : 'Duo API test failed.'),
                 response.status === 'ok'
             );
-        }).fail(function () {
-            $('#duo_test').prop('disabled', false);
-            showMessage('Unable to test Duo API credentials.', false);
         });
     });
 
