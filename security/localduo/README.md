@@ -5,7 +5,7 @@ OPNsense local password verification + Duo Auth API Push.
 ## Configuration
 
 - Under **System → Access → Servers**, configure a server of type **Local Database + Duo Push** with its Duo integration key (IKEY) and API hostname.
-- Click the **Duo credential manager** link in the IKEY field help (or visit **/ui/localduo** directly) to store a write-only SKEY for that IKEY.
+- Click the visible **Configure SKEY / Test Duo** button next to the IKEY field (or visit **/ui/localduo** directly) to store a write-only SKEY for that IKEY.
 - On the credential manager, click **Test Duo connection**. This calls Duo `/auth/v2/check` without sending Push.
 - Use **System → Access → Tester** for full end-to-end primary password + Duo Push validation.
 

@@ -46,6 +46,15 @@
 $(function () {
   'use strict';
   var api = '/api/localduo/settings/';
+  // IKEY and hostname are non-secret settings. Prefill from the server editor
+  // when the credential manager is opened through its shortcut.
+  var query = new URLSearchParams(window.location.search);
+  if (query.has('ikey')) {
+    $('#duo_ikey').val(query.get('ikey') || '');
+  }
+  if (query.has('host')) {
+    $('#duo_host').val(query.get('host') || '');
+  }
   function message(text, ok) {
     $('#duo_message').removeClass('alert-success alert-danger')
       .addClass(ok ? 'alert-success' : 'alert-danger').text(text);

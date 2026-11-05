@@ -25,7 +25,10 @@ class LocalDuo extends Local
     {
         return [
             'duo_ikey' => [
-                'name' => gettext('Duo integration key (IKEY)'),
+                'name' => gettext('Duo integration key (IKEY)') .
+                    ' <a class="btn btn-default btn-xs" href="/ui/localduo" ' .
+                    'target="_blank" rel="noopener noreferrer">' .
+                    gettext('Configure SKEY / Test Duo') . '</a>',
                 'type' => 'text',
                 'help' => gettext('Enter the Duo Auth API integration key. Manage the write-only secret and test connectivity at ') .
                     '<a href="/ui/localduo" target="_blank" rel="noopener noreferrer">Duo credential manager</a>.',
