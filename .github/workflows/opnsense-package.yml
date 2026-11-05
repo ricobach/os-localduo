@@ -1,0 +1,121 @@
+name: Build and publish OPNsense plugin
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "security/localduo/**"
+      - ".github/workflows/opnsense-package.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: localduo-package
+  cancel-in-progress: false
+
+jobs:
+  package:
+    name: Build on OPNsense 26.7 amd64
+    runs-on: ubuntu-latest
+    outputs:
+      publish: ${{ steps.publishcheck.outputs.enabled }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compile using OPNsense VM and create signed repo if configured
+        uses: vmactions/opnsense-vm@v1
+        env:
+          PKG_REPO_SIGNING_KEY_B64: ${{ secrets.PKG_REPO_SIGNING_KEY_B64 }}
+        with:
+          release: "26.7"
+          arch: x86_64
+          sync: rsync
+          envs: "PKG_REPO_SIGNING_KEY_B64"
+          run: |
+            set -eu
+            pkg install -y git
+            git clone --depth 1 --branch stable/26.7 https://github.com/opnsense/plugins.git /tmp/opnsense-plugins
+            cp -R security/localduo /tmp/opnsense-plugins/security/localduo
+            cd /tmp/opnsense-plugins/security/localduo
+            make lint
+            make package
+
+            mkdir -p "${GITHUB_WORKSPACE}/dist/packages" "${GITHUB_WORKSPACE}/site/26.7/amd64"
+            pkg_file="$(find /tmp/opnsense-plugins -type f -name 'os-localduo-*.pkg' | head -n 1)"
+            if [ -z "$pkg_file" ]; then
+              echo "Could not locate os-localduo package output" >&2
+              exit 1
+            fi
+            cp "$pkg_file" "${GITHUB_WORKSPACE}/dist/packages/"
+            pkg info -F "$pkg_file" > "${GITHUB_WORKSPACE}/dist/package-info.txt"
+
+            if [ -n "${PKG_REPO_SIGNING_KEY_B64:-}" ]; then
+              repo="${GITHUB_WORKSPACE}/site/26.7/amd64"
+              cp "$pkg_file" "$repo/"
+              umask 077
+              echo "$PKG_REPO_SIGNING_KEY_B64" | base64 -d > /tmp/localduo-signing.pem
+              pkg repo -s /tmp/localduo-signing.pem "$repo"
+              rm -f /tmp/localduo-signing.pem
+              test -f "$repo/meta.txz" -o -f "$repo/meta.pkg"
+            else
+              echo "No PKG_REPO_SIGNING_KEY_B64: unsigned package artifact only; no public repository"
+            fi
+
+      - name: Validate output before upload
+        shell: bash
+        run: |
+          set -euo pipefail
+          ls -lh dist/packages
+          find dist/packages -name 'os-localduo-*.pkg' -type f | grep -q .
+          test -s dist/package-info.txt
+
+      - name: Upload build package (development artifact)
+        uses: actions/upload-artifact@v4
+        with:
+          name: os-localduo-26.7-amd64
+          path: dist/
+          if-no-files-found: error
+
+      - name: Check signed repository
+        id: publishcheck
+        shell: bash
+        run: |
+          if find site/26.7/amd64 -maxdepth 1 \( -name 'meta.txz' -o -name 'meta.pkg' \) | grep -q .; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload signed repository site
+        if: steps.publishcheck.outputs.enabled == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: os-localduo-signed-repo
+          path: site/
+          if-no-files-found: error
+
+  pages:
+    name: Publish signed repository to GitHub Pages
+    needs: package
+    if: needs.package.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+      contents: read
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: os-localduo-signed-repo
+          path: site
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deployment
+        uses: actions/deploy-pages@v4
