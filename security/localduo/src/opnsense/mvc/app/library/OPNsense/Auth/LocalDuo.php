@@ -33,8 +33,6 @@ class LocalDuo extends Local
          * the value remains accessible in page source / developer tools.
          */
         $duoControls = <<<'HTML'
- <button id="localduo_test" type="button" class="btn btn-default btn-xs">Test Duo connection</button>
- <span id="localduo_test_status" role="status" style="display:block;font-size:12px;margin-top:5px;"></span>
  <script>
  $(function () {
      'use strict';
@@ -43,7 +41,18 @@ class LocalDuo extends Local
          return;
      }
      secret.attr('type', 'password').attr('autocomplete', 'new-password');
-     $('#localduo_test').on('click', function () {
+     // Put controls in the same cell as the native SKEY input.
+     var test = $('<button/>', {
+         id: 'localduo_test',
+         type: 'button',
+         class: 'btn btn-default btn-sm',
+         text: 'Test Duo connection'
+     });
+     var status = $('<span/>', {id: 'localduo_test_status', role: 'status'})
+         .css({display: 'block', marginTop: '6px', fontSize: '12px'});
+     secret.after(test, status);
+     test.css({marginLeft: '8px'});
+     test.on('click', function () {
          var button = $(this);
          button.prop('disabled', true);
          $('#localduo_test_status').text('Checking Duo API credentials...');
