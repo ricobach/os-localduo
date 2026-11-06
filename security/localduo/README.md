@@ -22,6 +22,14 @@ The authentication-server editor now provides three optional presentation settin
 
 The old repetitive `Authentication: Administrative Login` line is removed. The source IP, if available, and username continue to be supplied automatically. Duo controls app-origin and location details independently; for example the `N/A` website/domain shown in Duo Mobile is not set by these plugin fields. These fields affect the content of new pushes only.
 
+## Login URL in Duo Push details (v0.9_4)
+
+LocalDuo includes a **Login URL** field in Duo Mobile's Push details when the Web GUI request provides a valid, recognizable host. The value contains only the configured Web GUI scheme, the host that the browser used, and an optional port (for example, `https://fw01.example.com:8443`). It does not include the request path, query string, credentials or any forwarded headers.
+
+To prevent arbitrary Host-header data from appearing in a trusted authentication prompt, DNS names must match the OPNsense hostname/FQDN or a name configured under **System → Settings → Administration → Alternate Hostnames**. Valid IPv4 and IPv6 addresses are supported as well. If the host is missing, malformed, or not recognized, the Login URL field is omitted without affecting authentication. Reverse proxies that change the Host header or externally visible scheme may require additional configuration; proxy-provided forwarded headers are deliberately not trusted.
+
+This is a **custom Duo Push detail**, not a replacement for Duo Mobile's own website/domain display. No changes to Duo credentials, the login overlay, or the core authentication flow are needed.
+
 ## OPNsense 26.7 compatibility and security
 
 OPNsense 26.7's pluggable authentication-server editor supports only text, dropdown and checkbox plugin fields. We register SKEY as a persisted text option and convert its input to type=password on DOM ready using trusted markup in the plugin-defined label. The authenticated page source still contains the populated secret, just as for other populated inputs. Masking does not provide encryption or protection from administrators with developer tools. The secret is stored in config.xml and backups.

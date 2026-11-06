@@ -261,6 +261,10 @@ HTML;
             if ($serviceLabel !== '') {
                 $pushInfo['Service'] = $serviceLabel;
             }
+            $loginUrl = self::loginUrl($system);
+            if ($loginUrl !== null) {
+                $pushInfo['Login URL'] = $loginUrl;
+            }
             if ($ip !== null) {
                 $pushInfo['Source IP'] = $ip;
             }
@@ -298,6 +302,74 @@ HTML;
             self::logAuthFailure(self::diagnosticReason($e), $username);
             return false;
         }
+    }
+
+
+    /**
+     * Show only the origin (scheme, host, optional port) used for this request.
+     *
+     * HTTP_HOST is untrusted input. Accept literal IP addresses or configured
+     * firewall hostnames/aliases; never use forwarded headers, URI paths,
+     * query strings or credentials. If verification fails, omit the detail.
+     */
+    private static function loginUrl($system): ?string
+    {
+        $authority = $_SERVER['HTTP_HOST'] ?? null;
+        if (!is_string($authority) || $authority === '' || strlen($authority) > 200) {
+            return null;
+        }
+
+        $hostname = '';
+        $port = null;
+        if (preg_match('/^\[([0-9a-f:.]+)\](?::([0-9]{1,5}))?$/iD', $authority, $parts)) {
+            if (!filter_var($parts[1], FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) {
+                return null;
+            }
+            $hostname = strtolower($parts[1]);
+            $displayHost = '[' . $hostname . ']';
+            $port = $parts[2] ?? null;
+        } elseif (preg_match('/^([a-z0-9.-]+)(?::([0-9]{1,5}))?$/iD', $authority, $parts)) {
+            $hostname = strtolower($parts[1]);
+            $displayHost = $hostname;
+            $port = $parts[2] ?? null;
+            if (!filter_var($hostname, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
+                $labels = explode('.', $hostname);
+                if (strlen($hostname) > 253) {
+                    return null;
+                }
+                foreach ($labels as $label) {
+                    if (!preg_match('/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/D', $label)) {
+                        return null;
+                    }
+                }
+                $name = strtolower(trim((string)($system->hostname ?? '')));
+                $domain = strtolower(trim((string)($system->domain ?? '')));
+                $allowed = [$name, 'localhost'];
+                if ($name !== '' && $domain !== '' && strpos($name, '.') === false) {
+                    $allowed[] = $name . '.' . $domain;
+                }
+                $aliases = trim((string)($system->webgui->althostnames ?? ''));
+                if ($aliases !== '') {
+                    $allowed = array_merge($allowed, preg_split('/\s+/', strtolower($aliases)));
+                }
+                if (!in_array($hostname, $allowed, true)) {
+                    return null;
+                }
+            }
+        } else {
+            return null;
+        }
+
+        if ($port !== null && ((int)$port < 1 || (int)$port > 65535)) {
+            return null;
+        }
+        // The configured Web GUI protocol is trusted. Do not accept a
+        // client-controlled X-Forwarded-Proto header.
+        $scheme = strtolower((string)($system->webgui->protocol ?? 'https'));
+        if (!in_array($scheme, ['http', 'https'], true)) {
+            return null;
+        }
+        return $scheme . '://' . $displayHost . ($port !== null ? ':' . (int)$port : '');
     }
 
     /** Credentials are exclusively from the selected native authentication server. */
