@@ -47,4 +47,46 @@ class SettingsController extends ApiControllerBase
             ];
         }
     }
+    /**
+     * Login-page patching is a global, privileged operation. Do not allow
+     * ordinary users who have access to the Duo connection-test endpoint.
+     */
+    private function loginProgressAction(string $command): array
+    {
+        $this->throwNotFullAdmin();
+        if (!$this->request->isPost()) {
+            return ['status' => 'failed', 'state' => 'unknown', 'message' => 'POST required'];
+        }
+        try {
+            $backend = new \OPNsense\Core\Backend();
+            $output = trim($backend->configdRun('localduo ' . $command));
+            $result = json_decode($output, true);
+            if (!is_array($result) || !in_array($result['state'] ?? '', ['enabled', 'disabled', 'unsupported'], true)) {
+                return ['status' => 'failed', 'state' => 'unknown', 'message' => 'Unable to inspect the login page.'];
+            }
+            return [
+                'status' => ($result['status'] ?? '') === 'ok' ? 'ok' : 'failed',
+                'state' => $result['state'],
+                'message' => (string)($result['message'] ?? '')
+            ];
+        } catch (\Throwable $e) {
+            return ['status' => 'failed', 'state' => 'unknown', 'message' => 'Login page operation failed.'];
+        }
+    }
+
+    public function loginstatusAction(): array
+    {
+        return $this->loginProgressAction('status');
+    }
+
+    public function loginenableAction(): array
+    {
+        return $this->loginProgressAction('enable');
+    }
+
+    public function logindisableAction(): array
+    {
+        return $this->loginProgressAction('disable');
+    }
+
 }

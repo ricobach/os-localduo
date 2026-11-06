@@ -55,6 +55,61 @@ class LocalDuo extends Local
          .css({display: 'block', marginTop: '6px', fontSize: '12px'});
      secret.after(test, status);
      test.css({marginLeft: '8px'});
+
+     // Login progress feedback affects the firewall's login page globally.
+     // It is managed here, not persisted per Duo authentication server.
+     var progress = $('<div/>', {id: 'localduo_login_progress'})
+         .css({marginTop: '12px', paddingTop: '8px'});
+     var title = $('<strong/>', {text: 'Login progress feedback'});
+     var state = $('<span/>', {id: 'localduo_login_state', role: 'status'})
+         .css({display: 'block', margin: '5px 0', fontSize: '12px'});
+     var enable = $('<button/>', {
+         type: 'button', class: 'btn btn-default btn-sm', text: 'Enable'
+     });
+     var disable = $('<button/>', {
+         type: 'button', class: 'btn btn-default btn-sm', text: 'Disable'
+     }).css({marginLeft: '8px'});
+     progress.append(title, state, enable, disable);
+     secret.parent().append(progress);
+     function showProgress(response) {
+         var current = response && response.state;
+         if (current === 'enabled') {
+             state.text('Enabled — login page is patched.');
+         } else if (current === 'disabled') {
+             state.text('Disabled — login page is not patched.');
+         } else {
+             state.text(response.message || 'Unable to determine login progress status.');
+         }
+         enable.prop('disabled', current !== 'disabled');
+         disable.prop('disabled', current !== 'enabled');
+     }
+     function refreshProgress() {
+         state.text('Checking login page...');
+         enable.prop('disabled', true);
+         disable.prop('disabled', true);
+         ajaxCall('/api/localduo/settings/loginstatus', {}, showProgress);
+     }
+     function changeProgress(endpoint) {
+         state.text('Updating login page...');
+         enable.prop('disabled', true);
+         disable.prop('disabled', true);
+         ajaxCall(endpoint, {}, function (response) {
+             if (response.status !== 'ok') {
+                 state.text(response.message || 'Could not update the login page.');
+                 enable.prop('disabled', true);
+                 disable.prop('disabled', true);
+             } else {
+                 showProgress(response);
+             }
+         });
+     }
+     enable.on('click', function () {
+         changeProgress('/api/localduo/settings/loginenable');
+     });
+     disable.on('click', function () {
+         changeProgress('/api/localduo/settings/logindisable');
+     });
+     refreshProgress();
      test.on('click', function () {
          var button = $(this);
          button.prop('disabled', true);

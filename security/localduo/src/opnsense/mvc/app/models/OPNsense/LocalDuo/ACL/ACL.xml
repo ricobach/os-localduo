@@ -5,4 +5,12 @@
       <pattern>api/localduo/settings/check</pattern>
     </patterns>
   </page-system-localduo>
+  <page-system-localduo-login-progress>
+    <name>System: Duo login progress management</name>
+    <patterns>
+      <pattern>api/localduo/settings/loginstatus</pattern>
+      <pattern>api/localduo/settings/loginenable</pattern>
+      <pattern>api/localduo/settings/logindisable</pattern>
+    </patterns>
+  </page-system-localduo-login-progress>
 </acl>

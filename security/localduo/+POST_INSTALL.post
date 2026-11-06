@@ -1,2 +1,0 @@
-# OPNsense 26.7 has no native extension hook for its unauthenticated login page.
-/usr/local/bin/php /usr/local/opnsense/scripts/OPNsense/LocalDuo/LoginHint.php install || true
