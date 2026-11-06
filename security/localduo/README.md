@@ -52,7 +52,7 @@ LocalDuo logs fixed reason codes, sanitized usernames and validated source IP ad
 
 Examples: local_password_rejected, duo_preauth_denied, duo_preauth_not_authorized, duo_push_unavailable, duo_push_denied, duo_push_not_approved, duo_configuration_invalid, duo_api_timeout, duo_dns_failure, duo_connection_failed, duo_tls_failed, duo_network_error, duo_api_unauthorized, duo_api_rate_limited, duo_api_server_error, duo_api_http_error, duo_api_rejected, duo_invalid_response and duo_unexpected_error. All errors continue to fail closed.
 
-## Optional login progress feedback (v0.9_2)
+## Optional login progress feedback (v0.9_3)
 
 Under **System → Access → Servers**, select a **Local Database + Duo Push** server. In the SKEY row, the new **Login progress feedback** controls show whether the *global* OPNsense login page is currently patched. Click **Enable** to add the script reference; click **Disable** to remove it. The controls check the actual login template, including patches left by v0.9_1. This feature is not stored as a per-server option.
 
@@ -60,4 +60,4 @@ New installations do **not** patch the login page automatically. On upgrade from
 
 The patch is idempotent and changes only one script include in `/usr/local/www/authgui.inc`. It is performed by a privileged configd action, available only to full administrators. An unknown core template or duplicate patch is reported rather than overwritten. A core upgrade may remove the inclusion; re-enable it from the server editor.
 
-The optional login message reads **Signing in… Check Duo Mobile if prompted.** It never claims the password was verified, and the password/Duo authentication flow is unchanged.
+When enabled, submitting the login form displays a centered, non-dismissible modal with a loading spinner and **Signing in… Check Duo Mobile and approve the request if prompted.** The overlay disappears when OPNsense loads the next page after success or failure. A reduced-motion preference disables the spinner animation. It never claims the password was verified, and the password/Duo authentication flow is unchanged.
