@@ -1,71 +1,56 @@
-# os-localduo v0.9 (experimental)
+# os-localduo — plugin documentation
 
-Native OPNsense authentication server: local password validation followed by Duo Auth API Push.
+Native OPNsense local-account authentication followed by Duo Auth API Push MFA. Supported target: **OPNsense 26.7 / amd64**.
 
-## Configure
+## Authentication behavior
 
-1. In **System → Access → Servers**, add or edit a server of type **Local Database + Duo Push**.
-2. Enter **Integration key (IKEY)**, **Secret key (SKEY)** and **API hostname** on the same form.
-3. Click **Test Duo connection** next to SKEY. It checks Duo /auth/v2/check using the entered credentials, without sending a Push.
-4. Save the authentication server normally.
-5. Use **System → Access → Tester** to verify local password + actual Duo Push.
+The plugin verifies the user's password against the existing OPNsense local database, including the base provider's normal account checks, before contacting Duo. It performs preauthentication and sends an ordinary Duo Push only when an eligible Push-capable device is available. A login succeeds only after Duo reports an explicit approval; other outcomes and API errors deny access.
 
-The SKEY is a **standard password field** in the browser: it is populated from the saved server configuration, displayed masked, and resubmitted on Save. Changing the field replaces the stored value. No separate credential-management page remains.
+**Verified Push / number matching is not supported.** Keep console access and a separate working administrator session while testing. Review the Web GUI authenticator selection: permitting a non-MFA fallback server could bypass this plugin.
 
-## Duo Push appearance
+## Configure in System → Access → Servers
 
-The authentication-server editor now provides three optional presentation settings:
+Create or edit an authentication server of type **Local Database + Duo Push**, with:
 
-- **Duo Push title**: blank by default, which lets Duo Mobile show its normal login wording. Set e.g. `Login` if you want a short `Login: OPNsense` heading. The app name `OPNsense` comes from the Duo application's name in the Duo Admin Panel, not from this setting.
-- **Duo Push firewall label**: blank uses the firewall's FQDN; set a short custom label if preferred.
-- **Duo Push service label**: defaults to `Web GUI`. Clear it to omit the Service line.
+- **Duo integration key (IKEY)**, **Duo secret key (SKEY)** and **Duo API hostname** — required, stored with this server.
+- **Duo Push title** — optional; leaving it blank uses Duo's default wording.
+- **Duo Push firewall label** — optional; leaving it blank uses the firewall FQDN.
+- **Duo Push service label** — defaults to `Web GUI`; leave blank to omit the Service line.
 
-The old repetitive `Authentication: Administrative Login` line is removed. The source IP, if available, and username continue to be supplied automatically. Duo controls app-origin and location details independently; for example the `N/A` website/domain shown in Duo Mobile is not set by these plugin fields. These fields affect the content of new pushes only.
+The SKEY input is populated from the stored configuration, then visually masked by browser-side JavaScript. **Masking is not secrecy:** the value remains inspectable in the authenticated page HTML and is stored in `config.xml` and backups. The generic OPNsense auth server editor exposes text, dropdown and checkbox plugin field types; the masking relies on the editor rendering the plugin-supplied inline script.
 
-## Login URL in Duo Push details (v0.9_4)
+**Test Duo connection** calls `/auth/v2/check` using the entered credentials. It tests API connectivity without initiating a Push. Save the authentication server and use **System → Access → Tester** to verify actual password-plus-Push behavior.
 
-LocalDuo includes a **Login URL** field in Duo Mobile's Push details when the Web GUI request provides a valid, recognizable host. The value contains only the configured Web GUI scheme, the host that the browser used, and an optional port (for example, `https://fw01.example.com:8443`). It does not include the request path, query string, credentials or any forwarded headers.
+## Duo Push details
 
-To prevent arbitrary Host-header data from appearing in a trusted authentication prompt, DNS names must match the OPNsense hostname/FQDN or a name configured under **System → Settings → Administration → Alternate Hostnames**. Valid IPv4 and IPv6 addresses are supported as well. If the host is missing, malformed, or not recognized, the Login URL field is omitted without affecting authentication. Reverse proxies that change the Host header or externally visible scheme may require additional configuration; proxy-provided forwarded headers are deliberately not trusted.
+The request can include Firewall, Service, Source IP and **Login URL**, alongside Duo's standard approval context. The login URL is derived from the current Web GUI request and includes only the configured scheme, host and optional port (for example, `https://fw01.example.com:8443`), not paths, query parameters or credentials.
 
-This is a **custom Duo Push detail**, not a replacement for Duo Mobile's own website/domain display. No changes to Duo credentials, the login overlay, or the core authentication flow are needed.
+DNS hostnames must match the configured firewall name/FQDN or an **Alternate Hostname** under **System → Settings → Administration**. Valid IPv4 and IPv6 addresses are accepted. If the host is unavailable or unrecognized, the URL is omitted. Forwarded proxy headers are not trusted, so reverse proxies may prevent the external URL from being shown correctly.
 
-## OPNsense 26.7 compatibility and security
+This is a custom Duo Push detail; it does not control Duo Mobile's own website/domain field.
 
-OPNsense 26.7's pluggable authentication-server editor supports only text, dropdown and checkbox plugin fields. We register SKEY as a persisted text option and convert its input to type=password on DOM ready using trusted markup in the plugin-defined label. The authenticated page source still contains the populated secret, just as for other populated inputs. Masking does not provide encryption or protection from administrators with developer tools. The secret is stored in config.xml and backups.
+## Optional login progress overlay
 
-The editor integration assumes OPNsense continues rendering plugin labels and inline scripts. Verify it visually on the target release.
+The **Login progress feedback** controls are displayed in the authentication server editor, beside the SKEY input. They detect whether the login page is patched and provide **Enable** and **Disable** actions. This controls the **global** Web GUI login page; it is not a per-server preference.
 
-## Migration to v0.9
+When enabled, the login form displays a modal overlay with a spinner and **Signing in… Check Duo Mobile and approve the request if prompted.** while the ordinary blocking login request runs. It disappears when OPNsense loads the next page. The message deliberately does not reveal whether the local password was valid.
 
-The connector now reads IKEY, SKEY and API hostname exclusively from the selected authentication server. The old global and separate-secret fallbacks are gone. **Before upgrading**, confirm these three fields are populated and a full Duo login succeeds. Back up the firewall configuration and keep recovery access. Legacy secret values are not automatically deleted from the configuration file.
+### Core login-template patch: trade-off and preferred design
 
-The native editor now requires valid IKEY, SKEY and API hostname values on save, including edits. Hostname matching is case-insensitive, and runtime normalization uses lowercase.
+The OPNsense login form is implemented in **`/usr/local/www/authgui.inc`**, and the targeted OPNsense version has no supported plugin extension hook for adding unauthenticated-login progress UI.
 
-## Diagnostics
+LocalDuo therefore inserts one `/ui/js/localduo-login.js` script reference using a privileged OPNsense `configd` action. The patcher reads the actual file to detect its current state, makes an idempotent change, supports removing the reference, and refuses unexpected or duplicated patterns. The overlay is **optional**; Duo authentication works without it.
 
-The connection test now reports safe, actionable messages for DNS, TLS, timeouts, invalid credentials, HTTP failures, and rate limits, without returning raw errors. Successful and failed tests are logged. Push denial codes distinguish known Duo statuses: deny, timeout, fraud and locked_out; other outcomes remain denied.
+**This is a compromise:** the file is maintained by OPNsense core, so firmware upgrades can remove the reference or change the expected location. Modifying a core-owned file can create compatibility and maintenance work. The patcher does not own or replace the entire login template, but this is not a guarantee of future compatibility.
 
-## Limitations
+**A supported extension interface in OPNsense core would be preferable**, such as a dedicated script-inclusion hook or a neutral authentication-progress UI event. It would eliminate core-file patching, survive upgrades more reliably, and provide a reusable option for other MFA authentication providers. Until that exists, keeping the feature opt-in and reversible limits the impact.
 
-- Experimental: install and runtime-test on a real OPNsense 26.7 firewall.
-- Ordinary Duo Push only; no Verified Push / number matching.
-- Browser source IP may be unavailable to backend authentication.
-- Test failure and success cases while keeping an existing administrator session and console recovery.
-- Duo connection test API access is controlled by a separate plugin ACL; grant it to trusted users only.
+## Diagnostics, access and limitations
 
-## Safe diagnostic logging
+LocalDuo uses fixed diagnostic reason codes for local-password failures, Duo preauthentication denials, Push denials/timeouts and Duo network/API failures. Username and source-IP logging is sanitized. It does not log passwords, IKEY/SKEY, API bodies, signatures, or raw exception strings.
 
-LocalDuo logs fixed reason codes, sanitized usernames and validated source IP addresses for failed logins. Failed connection tests log the same transport and API reason codes. Neither path logs passwords, SKEY, IKEY, Duo response bodies, signatures, raw exception strings or endpoint URLs.
+The connection-test API has its own plugin ACL. Login-page patch management is restricted to full administrators and uses privileged `configd` operations.
 
-Examples: local_password_rejected, duo_preauth_denied, duo_preauth_not_authorized, duo_push_unavailable, duo_push_denied, duo_push_not_approved, duo_configuration_invalid, duo_api_timeout, duo_dns_failure, duo_connection_failed, duo_tls_failed, duo_network_error, duo_api_unauthorized, duo_api_rate_limited, duo_api_server_error, duo_api_http_error, duo_api_rejected, duo_invalid_response and duo_unexpected_error. All errors continue to fail closed.
+This is experimental software. Test the GUI integration, TLS/DNS failures, Push approval/denial, retry behavior and recovery procedures on a real target firewall. The optional GUI customization and authentication code have different operational risks, and both should be validated before production use.
 
-## Optional login progress feedback (v0.9_3)
-
-Under **System → Access → Servers**, select a **Local Database + Duo Push** server. In the SKEY row, the new **Login progress feedback** controls show whether the *global* OPNsense login page is currently patched. Click **Enable** to add the script reference; click **Disable** to remove it. The controls check the actual login template, including patches left by v0.9_1. This feature is not stored as a per-server option.
-
-New installations do **not** patch the login page automatically. On upgrade from v0.9_1, the earlier package's uninstall hook may remove its previous patch; use **Enable** after upgrading if desired. Package removal removes the patch.
-
-The patch is idempotent and changes only one script include in `/usr/local/www/authgui.inc`. It is performed by a privileged configd action, available only to full administrators. An unknown core template or duplicate patch is reported rather than overwritten. A core upgrade may remove the inclusion; re-enable it from the server editor.
-
-When enabled, submitting the login form displays a centered, non-dismissible modal with a loading spinner and **Signing in… Check Duo Mobile and approve the request if prompted.** The overlay disappears when OPNsense loads the next page after success or failure. A reduced-motion preference disables the spinner animation. It never claims the password was verified, and the password/Duo authentication flow is unchanged.
+For installation, signing-key fingerprint and package repository configuration, see the [repository README](../../README.md) and [publishing documentation](../../docs/PUBLISHING.md).
