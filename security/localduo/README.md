@@ -1,6 +1,6 @@
 # os-localduo — plugin documentation
 
-Native OPNsense local-account authentication followed by Duo Auth API Push MFA. Supported target: **OPNsense 26.7 / amd64**.
+Native OPNsense local-account authentication followed by Duo Auth API Push MFA. The current GitHub Actions package and signed repository are built for **OPNsense 26.7 / amd64**. The plugin is implemented in PHP and JavaScript and has no known dependency on the CPU architecture; other OPNsense architectures may be compatible after an appropriate build and validation. Other architectures and releases are not covered by the current published package.
 
 ## Authentication behavior
 
@@ -51,6 +51,6 @@ LocalDuo uses fixed diagnostic reason codes for local-password failures, Duo pre
 
 The connection-test API has its own plugin ACL. Login-page patch management is restricted to full administrators and uses privileged `configd` operations.
 
-This is experimental software. Test the GUI integration, TLS/DNS failures, Push approval/denial, retry behavior and recovery procedures on a real target firewall. The optional GUI customization and authentication code have different operational risks, and both should be validated before production use.
+This is a community-maintained authentication plugin. Test the GUI integration, TLS/DNS failures, Push approval/denial, retry behavior and recovery procedures on the target OPNsense installation. The optional GUI customization and authentication code have different operational risks, and both should be validated before production use.
 
 For installation, signing-key fingerprint and package repository configuration, see the [repository README](../../README.md) and [publishing documentation](../../docs/PUBLISHING.md).

@@ -86,8 +86,8 @@ jobs:
             </head>
             <body>
               <h1>os-localduo</h1>
-              <p>Experimental OPNsense plugin for local authentication plus Duo Push MFA.</p>
-              <p><strong>Build:</strong> OPNsense 26.7 / amd64. Pre-production; test in a lab before deploying.</p>
+              <p>Community-maintained OPNsense plugin for local authentication plus Duo Push MFA.</p>
+              <p><strong>Build:</strong> OPNsense 26.7 / amd64. Verify authentication and recovery access before deployment.</p>
               <p><a href="./26.7/amd64/meta.conf">Repository metadata (meta.conf)</a></p>
               <p><a href="https://github.com/ricobach/os-localduo">Source code and installation guidance</a></p>
               <p><a href="./localduo-repo-public.pem">RSA package repository public key</a></p>

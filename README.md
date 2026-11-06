@@ -1,8 +1,8 @@
 # os-localduo
 
-**Experimental OPNsense authentication plugin:** verify an OPNsense local user password, then require approval through Duo Push MFA. The plugin integrates with **System → Access → Servers**, without a separate authentication management page.
+**Community-maintained OPNsense authentication plugin:** verify an OPNsense local user password, then require approval through Duo Push MFA. The plugin integrates with **System → Access → Servers**, without a separate authentication management page.
 
-It targets **OPNsense 26.7 / amd64**. Keep console access and an existing administrator session during initial testing.
+The plugin's PHP/JavaScript implementation has no known CPU-architecture-specific dependency. The current **prebuilt package repository targets OPNsense 26.7 on amd64**, because that is the build environment configured in GitHub Actions. Other OPNsense architectures may be able to run a package built for their architecture, but those builds are not currently published or verified here. Keep console access and an existing administrator session when first deploying MFA.
 
 ## Features
 
@@ -16,6 +16,8 @@ It targets **OPNsense 26.7 / amd64**. Keep console access and an existing admini
 Only ordinary Duo Push is supported; **Verified Push / number matching is not supported**.
 
 ## Installation
+
+**Package availability:** the instructions below use the published OPNsense 26.7 / amd64 repository. The plugin source is not inherently restricted to amd64, but a matching package must be built and tested for each other target architecture and OPNsense release.
 
 The [installation script](scripts/install.sh) embeds the repository signing public key and verifies its SHA-256 fingerprint. It creates the key file and `pkg` repository configuration, refreshes the repository catalogue and installs the plugin. No separate public key download is needed.
 
@@ -81,6 +83,6 @@ This is a **compatibility trade-off**, not the preferred long-term integration:
 
 LocalDuo fails closed on Duo API errors and uses fixed diagnostic reason codes rather than logging credentials, raw API responses or request signatures. Push request details are assembled from constrained values; an unrecognized login hostname is omitted.
 
-**Pre-production software:** validate successful and denied Push flows, invalid local passwords, timeout handling, and recovery access on the target OPNsense release. The third-party repository and this plugin are not official OPNsense packages.
+**Deployment guidance:** validate successful and denied Push flows, invalid local passwords, timeout handling, and recovery access on the target OPNsense release. This is a community-maintained plugin distributed through a third-party repository, not an officially maintained OPNsense package. The optional login-template patch may need re-enabling after OPNsense updates.
 
 For technical details and compatibility notes, see the [plugin README](security/localduo/README.md).

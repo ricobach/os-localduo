@@ -4,7 +4,9 @@ The workflow [Build and publish OPNsense plugin](../../.github/workflows/opnsens
 
 ## Output
 
-1. The workflow uploads an **Actions artifact** named `os-localduo-26.7-amd64` containing the experimental `.pkg`. This artifact is not a public repository and does not make the plugin visible in System → Firmware → Plugins.
+The PHP/JavaScript plugin source has no known CPU-specific dependency. The current workflow only builds and publishes **OPNsense 26.7 / amd64** packages; support on other architectures requires building and validating appropriate packages and publishing separate repository metadata. The installer currently references the amd64 repository explicitly.
+
+1. The workflow uploads an **Actions artifact** named `os-localduo-26.7-amd64` containing the built `.pkg`. This artifact is not a public repository and does not make the plugin visible in System → Firmware → Plugins.
 2. When a signing key is configured, the same workflow generates a **signed pkg repository** using `pkg repo -s`, then deploys it via **GitHub Pages**.
 
 ## Signing setup (required before Pages publication)
@@ -95,8 +97,8 @@ Then: `pkg update -r localduo`; verify `pkg search -r localduo os-localduo`. OPN
 
 ## Limitations
 
-- The current plugin is an **untested prototype**, and the Actions workflow itself is unverified until a successful run.
-- Only OPNsense **26.7 / amd64** is targeted; there are no universal or cross-release packages.
+- This is a **community-maintained plugin**; validate the authentication flow and recovery procedures in your own environment.
+- Only OPNsense **26.7 / amd64** binaries are currently built and published; the source is not known to require amd64, but other architecture/release combinations are not verified or distributed here.
 - Pages publication will not run unless `PKG_REPO_SIGNING_KEY_B64` is configured.
 - Changing the signing key requires distributing the new public key to all clients.
 - Do not use the development artifact as the sole authentication option for a production Web GUI.
