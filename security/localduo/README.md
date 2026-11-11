@@ -16,6 +16,8 @@ Create or edit an authentication server of type **Local Database + Duo Push**, w
 - **Duo Push title** — optional; leaving it blank uses Duo's default wording.
 - **Duo Push firewall label** — optional; leaving it blank uses the firewall FQDN.
 - **Duo Push service label** — defaults to `Web GUI`; leave blank to omit the Service line.
+- **Trust Cloudflare Tunnel client IP** — off by default; enable only when the immediate connecting proxy is explicitly trusted.
+- **Trusted tunnel/proxy peer IPs or CIDRs** — a comma- or space-separated list of immediate TCP peer addresses (up to 32), not the public Cloudflare edge networks unless those are the actual immediate peers.
 
 The SKEY input is populated from the stored configuration, then visually masked by browser-side JavaScript. **Masking is not secrecy:** the value remains inspectable in the authenticated page HTML and is stored in `config.xml` and backups. The generic OPNsense auth server editor exposes text, dropdown and checkbox plugin field types; the masking relies on the editor rendering the plugin-supplied inline script.
 
@@ -28,6 +30,21 @@ The request can include Firewall, Service, Source IP and **Login URL**, alongsid
 DNS hostnames must match the configured firewall name/FQDN or an **Alternate Hostname** under **System → Settings → Administration**. Valid IPv4 and IPv6 addresses are accepted. If the host is unavailable or unrecognized, the URL is omitted. Forwarded proxy headers are not trusted, so reverse proxies may prevent the external URL from being shown correctly.
 
 This is a custom Duo Push detail; it does not control Duo Mobile's own website/domain field.
+
+## Client IP behind Cloudflare Tunnel
+
+By default the client/source IP is the connection peer (`REMOTE_ADDR`). This may be the `cloudflared` connector, HAProxy, or another reverse proxy, rather than the browser's public IP.
+
+To display the user's IP in Duo Mobile:
+
+1. Identify the **immediate TCP peer** that connects to the OPNsense Web GUI, such as the dedicated connector's local address or HAProxy's backend address. Check the Web GUI access logs or network path; do not assume the peer IP.
+2. Configure **Trusted tunnel/proxy peer IPs or CIDRs** with that exact peer IP (prefer `/32` for IPv4 or `/128` for IPv6). For example, `127.0.0.1/32` is acceptable **only if no untrusted local process or service can send requests with forged headers**.
+3. Enable **Trust Cloudflare Tunnel client IP** and save the authentication server.
+4. Verify that your proxy **replaces or sanitizes client-supplied `CF-Connecting-IP`**, and that direct/untrusted connections cannot impersonate a trusted peer.
+
+The plugin uses `CF-Connecting-IP` only if the option is enabled, the connecting peer matches the configured list, and the header is a single valid IPv4/IPv6 address. Invalid/absent headers, untrusted peers, or invalid configuration fall back to `REMOTE_ADDR`. The resolved address is used consistently for Duo preauthentication `ipaddr`, Duo authentication `ipaddr`, and the Push **Source IP** detail. It does not use `X-Forwarded-For` or automatically trust loopback/private networks.
+
+**Security trade-off:** `CF-Connecting-IP` is not cryptographically authenticated to the plugin. Trust in the value rests entirely on your proxy boundary and header sanitization; a forged header from an allowed peer could give Duo an incorrect source-IP context. If the tunnel reaches HAProxy first, configure the immediate **HAProxy → Web GUI peer** and ensure HAProxy reliably forwards only sanitized Cloudflare client metadata.
 
 ## Optional login progress overlay
 

@@ -10,6 +10,7 @@ The plugin's PHP/JavaScript implementation has no known CPU-architecture-specifi
 - Duo integration key (IKEY), secret key (SKEY), API hostname and Push presentation options configured in the native authentication server editor.
 - **Test Duo connection** validates the entered API credentials without sending a Push.
 - Duo Push details can include firewall and service labels, source IP, and a validated **Login URL** (scheme, hostname and optional port).
+- Optional **Cloudflare Tunnel client IP** handling: trust `CF-Connecting-IP` only from explicitly configured proxy peers, otherwise use the direct connection IP.
 - Fail-closed handling of Duo errors, denials and timeouts, with sanitized diagnostic logging.
 - Optional login progress modal and **Enable / Disable** controls in the server editor, including detection of the current login-page patch state.
 
@@ -60,6 +61,10 @@ Verify this fingerprint against an independently trusted copy: a downloaded inst
 5. Configure the intended Web GUI authentication servers, ensuring that an unintended alternate authenticator does not bypass Duo.
 
 The SKEY is masked in the editor but is still present in the authenticated HTML source and saved in OPNsense configuration/backups. Masking is not encryption.
+
+## Client IP through Cloudflare Tunnel
+
+In **System → Access → Servers**, enable **Trust Cloudflare Tunnel client IP** and configure **Trusted tunnel/proxy peer IPs or CIDRs** for the immediate proxy/connector that connects to the Web GUI. These fields are disabled/empty by default. Only valid `CF-Connecting-IP` addresses received from the explicitly trusted peer are sent to Duo; otherwise the direct peer IP is used. The proxy must overwrite untrusted client headers. See [trusted-proxy setup and caveats](security/localduo/README.md#client-ip-behind-cloudflare-tunnel).
 
 ## Optional login progress overlay
 

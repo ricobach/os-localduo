@@ -20,7 +20,9 @@ class LocalDuo extends Local
             'skey' => (string)($config['duo_skey'] ?? ''),
             'push_type' => trim((string)($config['duo_push_type'] ?? '')),
             'push_firewall' => trim((string)($config['duo_push_firewall'] ?? '')),
-            'push_service' => trim((string)($config['duo_push_service'] ?? 'Web GUI'))
+            'push_service' => trim((string)($config['duo_push_service'] ?? 'Web GUI')),
+            'trust_cf_client_ip' => in_array(strtolower((string)($config['duo_trust_cf_client_ip'] ?? '')), ['1', 'yes', 'true', 'on'], true),
+            'trusted_proxy_ips' => trim((string)($config['duo_trusted_proxy_ips'] ?? ''))
         ];
     }
 
@@ -175,6 +177,20 @@ HTML;
                         ? [] : [gettext('Invalid service display label.')];
                 }
             ],
+            'duo_trust_cf_client_ip' => [
+                'name' => gettext('Trust Cloudflare Tunnel client IP'),
+                'type' => 'checkbox',
+                'help' => gettext('Disabled by default. Only read CF-Connecting-IP when the connecting peer matches a configured trusted proxy IP or CIDR.')
+            ],
+            'duo_trusted_proxy_ips' => [
+                'name' => gettext('Trusted tunnel/proxy peer IPs or CIDRs'),
+                'type' => 'text',
+                'help' => gettext('Comma or space separated IP addresses/CIDRs of the immediate peers connecting to this Web GUI (for example 127.0.0.1/32 or 192.0.2.10/32). Never trust an entire shared network unnecessarily. Required when Cloudflare client IP trust is enabled.'),
+                'validate' => function ($value) {
+                    return self::validProxyRanges((string)($value ?? ''))
+                        ? [] : [gettext('Enter at most 32 valid IPv4/IPv6 IP addresses or CIDRs, separated by commas or spaces.')];
+                }
+            ],
             'duo_host' => [
                 'name' => gettext('Duo API hostname'),
                 'type' => 'text',
@@ -226,10 +242,7 @@ HTML;
             $domain = trim((string)($system->domain ?? ''));
             $fqdn = $name === '' ? (gethostname() ?: 'OPNsense') :
                 ($domain !== '' && strpos($name, '.') === false ? $name . '.' . $domain : $name);
-            $ip = $_SERVER['REMOTE_ADDR'] ?? null;
-            if (!is_string($ip) || !filter_var($ip, FILTER_VALIDATE_IP)) {
-                $ip = null;
-            }
+            $ip = $this->sourceIp();
             $pre = ['username' => (string)$username];
             if ($ip !== null) { $pre['ipaddr'] = $ip; }
             $resp = self::request($config, 'POST', '/auth/v2/preauth', $pre);
@@ -370,6 +383,95 @@ HTML;
             return null;
         }
         return $scheme . '://' . $displayHost . ($port !== null ? ':' . (int)$port : '');
+    }
+
+    /** Validate an explicit, bounded list of trusted immediate proxy peers. */
+    public static function validProxyRanges(string $ranges): bool
+    {
+        $ranges = trim($ranges);
+        if ($ranges === '') {
+            return true; // Disabled by default; an empty list never trusts a header.
+        }
+        if (strlen($ranges) > 1024) {
+            return false;
+        }
+        $items = preg_split('/[\s,]+/', $ranges);
+        if (count($items) > 32) {
+            return false;
+        }
+        foreach ($items as $item) {
+            $parts = explode('/', $item);
+            if (count($parts) > 2 || !filter_var($parts[0], FILTER_VALIDATE_IP)) {
+                return false;
+            }
+            $bits = strpos($parts[0], ':') !== false ? 128 : 32;
+            if (count($parts) === 2 &&
+                (!preg_match('/^(0|[1-9][0-9]{0,2})$/D', $parts[1]) ||
+                    (int)$parts[1] > $bits)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** Compare address bytes against an exact IP or CIDR, for IPv4 and IPv6. */
+    private static function ipInRange(string $ip, string $range): bool
+    {
+        $parts = explode('/', $range, 2);
+        $peer = inet_pton($ip);
+        $network = inet_pton($parts[0]);
+        if ($peer === false || $network === false || strlen($peer) !== strlen($network)) {
+            return false;
+        }
+        $prefix = isset($parts[1]) ? (int)$parts[1] : strlen($network) * 8;
+        $whole = intdiv($prefix, 8);
+        $partial = $prefix % 8;
+        if (substr($peer, 0, $whole) !== substr($network, 0, $whole)) {
+            return false;
+        }
+        if ($partial === 0) {
+            return true;
+        }
+        $mask = (0xff << (8 - $partial)) & 0xff;
+        return (ord($peer[$whole]) & $mask) === (ord($network[$whole]) & $mask);
+    }
+
+    /**
+     * Use CF-Connecting-IP only from a configured trusted immediate peer.
+     * Neither forwarded headers nor a local/loopback connection is
+     * automatically trusted. If anything is invalid, use REMOTE_ADDR.
+     */
+    private function sourceIp(): ?string
+    {
+        $peer = $_SERVER['REMOTE_ADDR'] ?? null;
+        if (!is_string($peer) || !filter_var($peer, FILTER_VALIDATE_IP)) {
+            return null;
+        }
+        if (!$this->serverProperties['trust_cf_client_ip']) {
+            return $peer;
+        }
+        $ranges = $this->serverProperties['trusted_proxy_ips'];
+        if (!self::validProxyRanges($ranges) || $ranges === '') {
+            return $peer;
+        }
+        $trusted = false;
+        foreach (preg_split('/[\s,]+/', trim($ranges)) as $range) {
+            if (self::ipInRange($peer, $range)) {
+                $trusted = true;
+                break;
+            }
+        }
+        if (!$trusted) {
+            return $peer;
+        }
+        $forwarded = $_SERVER['HTTP_CF_CONNECTING_IP'] ?? null;
+        // Only one address; reject lists, whitespace, ports and zone identifiers.
+        if (!is_string($forwarded) || $forwarded === '' ||
+            $forwarded !== trim($forwarded) ||
+            !filter_var($forwarded, FILTER_VALIDATE_IP)) {
+            return $peer;
+        }
+        return $forwarded;
     }
 
     /** Credentials are exclusively from the selected native authentication server. */
