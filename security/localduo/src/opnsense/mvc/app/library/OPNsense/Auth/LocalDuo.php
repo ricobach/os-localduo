@@ -112,6 +112,44 @@ class LocalDuo extends Local
          changeProgress('/api/localduo/settings/logindisable');
      });
      refreshProgress();
+     // Alternative to the core-file patch: manual copy and activation of a theme.
+     var theme = $('<div/>', {id: 'localduo_theme_tools'})
+         .css({marginTop: '12px', paddingTop: '8px'});
+     var themeState = $('<span/>', {role: 'status'})
+         .css({display: 'block', margin: '5px 0', fontSize: '12px'});
+     var createTheme = $('<button/>', {type: 'button', class: 'btn btn-default btn-sm', text: 'Create Duo Theme'});
+     var activateTheme = $('<button/>', {type: 'button', class: 'btn btn-default btn-sm', text: 'Activate Duo Theme'}).css({marginLeft: '8px'});
+     var restoreTheme = $('<button/>', {type: 'button', class: 'btn btn-default btn-sm', text: 'Restore Original Theme'}).css({marginLeft: '8px'});
+     theme.append($('<strong/>', {text: 'Theme-based login progress (no core patch)'}),
+         themeState, createTheme, activateTheme, restoreTheme);
+     progress.after(theme);
+     function refreshTheme() {
+         themeState.text('Checking theme...');
+         ajaxCall('/api/localduo/settings/themestatus', {}, function (response) {
+             themeState.text(response.message || 'Theme status unavailable');
+             createTheme.prop('disabled', response.status !== 'ok' || response.state === 'active');
+             activateTheme.prop('disabled', response.state !== 'created');
+             restoreTheme.prop('disabled', response.state !== 'active');
+         });
+     }
+     function changeTheme(action) {
+         createTheme.prop('disabled', true);
+         activateTheme.prop('disabled', true);
+         restoreTheme.prop('disabled', true);
+         themeState.text('Updating theme...');
+         ajaxCall('/api/localduo/settings/theme' + action, {}, function (response) {
+             themeState.text(response.message || 'Theme operation failed');
+             refreshTheme();
+         });
+     }
+     createTheme.on('click', function () { changeTheme('create'); });
+     activateTheme.on('click', function () {
+         if (window.confirm('Activate the copied Duo theme? Keep another admin session open for recovery.')) {
+             changeTheme('activate');
+         }
+     });
+     restoreTheme.on('click', function () { changeTheme('restore'); });
+     refreshTheme();
      test.on('click', function () {
          var button = $(this);
          button.prop('disabled', true);
