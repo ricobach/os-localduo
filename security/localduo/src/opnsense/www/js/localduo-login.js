@@ -2,6 +2,8 @@
 (function () {
     'use strict';
 
+    if (window.__localduoLoginInitialized) { return; }
+    window.__localduoLoginInitialized = true;
     function setup() {
         var form = document.getElementById('iform');
         var username = document.getElementById('usernamefld');

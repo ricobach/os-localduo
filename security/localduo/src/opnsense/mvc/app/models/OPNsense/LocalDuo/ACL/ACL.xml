@@ -11,6 +11,10 @@
       <pattern>api/localduo/settings/loginstatus</pattern>
       <pattern>api/localduo/settings/loginenable</pattern>
       <pattern>api/localduo/settings/logindisable</pattern>
+      <pattern>api/localduo/settings/themestatus</pattern>
+      <pattern>api/localduo/settings/themecreate</pattern>
+      <pattern>api/localduo/settings/themeactivate</pattern>
+      <pattern>api/localduo/settings/themerestore</pattern>
     </patterns>
   </page-system-localduo-login-progress>
 </acl>
