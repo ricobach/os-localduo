@@ -89,4 +89,22 @@ class SettingsController extends ApiControllerBase
         return $this->loginProgressAction('disable');
     }
 
+    private function themeAction(string $command): array
+    {
+        $this->throwNotFullAdmin();
+        if (!$this->request->isPost()) {
+            return ['status' => 'failed', 'message' => 'POST required'];
+        }
+        try {
+            $backend = new \OPNsense\Core\Backend();
+            $result = json_decode(trim($backend->configdRun('localduo theme' . $command)), true);
+            return is_array($result) ? $result : ['status' => 'failed', 'message' => 'Invalid theme response'];
+        } catch (\Throwable $e) {
+            return ['status' => 'failed', 'message' => 'Theme operation failed'];
+        }
+    }
+    public function themestatusAction(): array { return $this->themeAction('status'); }
+    public function themecreateAction(): array { return $this->themeAction('create'); }
+    public function themeactivateAction(): array { return $this->themeAction('activate'); }
+    public function themerestoreAction(): array { return $this->themeAction('restore'); }
 }
